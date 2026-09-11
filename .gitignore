@@ -1,0 +1,17 @@
+# Entornos virtuales
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# Archivos de configuración locales con credenciales
+.env
+
+# Datos temporales y recortes de imágenes de planillas
+app/temp_crops/
+*.jpg
+*.png
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db

@@ -1,0 +1,1350 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+🎯 Interfaz Web de Cómputos para Tiro con Arco (Gradio Standalone Single-File - v15)
+Lanzamiento eficiente directo en puerto 7860.
+Soporta:
+1. Selección múltiple de arqueros para transcripción simultánea en paralelo.
+2. Cambio interactivo de arquero activo para ver/editar puntuaciones sin perder datos (Gradio State).
+3. Auto-corrección Aritmética Activa durante la transcripción (corrige valores como un 3 a 8 en Recurvo).
+4. Panel de sugerencias matemáticas interactivas basadas en las reglas de cada categoría.
+5. Base de datos CSV dinámica con el nombre exacto de la planilla de entrada (p. ej., "planilla_1.csv").
+6. Guardado masivo y sincronizado de la hoja completa en una única operación.
+7. CARGA SEGURA DESDE EL BACKEND: NVIDIA_API_KEY leída de forma invisible de .env para evitar vulnerabilidades de inspección DOM.
+8. SIN DEPENDENCIAS DE IMPORTACIÓN EXTERNAS: Todas las clases de OCR e IA están embebidas en este único archivo.
+"""
+
+import os
+import sys
+
+# === CARGAR CONFIGURACIÓN DESDE .ENV (SOPORTE PARA CLAVE DE NVIDIA SEGURO EN EL BACKEND) ===
+if os.path.exists(".env"):
+    with open(".env", "r", encoding="utf-8") as f_env:
+        for line in f_env:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, val = line.split("=", 1)
+                os.environ[key.strip()] = val.strip().strip('"').strip("'")
+
+import os
+import sys
+import json
+import tempfile
+import shutil
+import pandas as pd
+import numpy as np
+import gradio as gr
+from PIL import Image
+import base64
+import requests
+from io import BytesIO
+from concurrent.futures import ThreadPoolExecutor
+import threading
+import time
+import re
+
+# Intentar pypdfium2 para PDFs
+try:
+    import pypdfium2 as pdfium
+    PDF_SUPPORT = True
+except ImportError:
+    PDF_SUPPORT = False
+
+# Base de datos local por defecto
+LOCAL_DB_PATH = "torneo_indoor_san_francisco_detallado.csv"
+session_crops = {}
+
+# === LIMITADOR DE TASA INTELIGENTE (PREVENCIÓN DE ERROR 429 - 40 RPM) ===
+class RateLimiter:
+    def __init__(self, requests_per_minute=38): # 38 RPM por seguridad
+        self.interval = 60.0 / requests_per_minute
+        self.last_request_time = 0.0
+        self.lock = threading.Lock()
+
+    def wait_if_needed(self):
+        with self.lock:
+            now = time.time()
+            elapsed = now - self.last_request_time
+            if elapsed < self.interval:
+                sleep_time = self.interval - elapsed
+                print(f"⏱️ [Rate-Limiter] Esperando {round(sleep_time, 2)}s para no exceder los 40 RPM...")
+                time.sleep(sleep_time)
+            self.last_request_time = time.time()
+
+api_rate_limiter = RateLimiter(requests_per_minute=25)
+
+
+def obtener_estimacion_formateada(file_input, mode_input, selected_targets):
+    if file_input is None:
+        return "<div style='color: #856404; background-color: #fff3cd; border: 1px solid #ffeeba; padding: 10px; border-radius: 5px; font-weight: bold;'>⚠️ Sube una planilla para estimar el consumo de cuota.</div>"
+    
+    file_path = file_input.name
+    filename = os.path.basename(file_path).lower()
+    
+    # Determinar si es PDF o imagen
+    es_pdf = filename.endswith(".pdf")
+    paginas = 1
+    if es_pdf:
+        try:
+            import pypdfium2 as pdfium
+            doc = pdfium.PdfDocument(file_path)
+            paginas = len(doc)
+        except Exception:
+            paginas = 1
+            
+    # Determinar modo de segmentación
+    usar_segmentacion = (mode_input == "Hoja Completa (4 Arqueros)")
+    if mode_input == "Detección Automática" and not es_pdf:
+        try:
+            img_temp = Image.open(file_path)
+            w, h = img_temp.size
+            if w > 1000 and h > 1000 and (0.7 < (w / h) < 1.4):
+                usar_segmentacion = True
+        except Exception:
+            pass
+            
+    # Calcular cantidad de peticiones requeridas
+    if usar_segmentacion:
+        num_arqueros_por_pagina = len(selected_targets) if selected_targets else 4
+        total_peticiones = paginas * num_arqueros_por_pagina
+    else:
+        total_peticiones = paginas
+        
+    limite_rpm = 40
+    segundos_por_ia = 3.5
+    
+    # Cálculo de tiempo total considerando el control de tasa
+    pausas_control = 0
+    if total_peticiones > 1:
+        pausas_control = (total_peticiones - 1) * 1.6
+        
+    tiempo_ia_total = total_peticiones * segundos_por_ia
+    tiempo_total_segundos = tiempo_ia_total + pausas_control
+    
+    html = f"""
+    <div style="background-color: #e2f0d9; color: #385723; padding: 15px; border-radius: 8px; border: 1px solid #c5e0b4; margin-top: 10px;">
+        <h4 style="margin-top: 0; color: #1f4e37; font-weight: bold; font-size: 1.1em; display: flex; align-items: center; gap: 5px;">
+            📊 Pre-flight: Estimación de Cuota y Tiempo (Límite: 40 RPM)
+        </h4>
+        <ul style="margin: 5px 0 10px 15px; padding: 0; line-height: 1.4; font-size: 0.95em;">
+            <li><b>Tipo de Entrada:</b> {"PDF de " + str(paginas) + " páginas" if es_pdf else "Imagen individual"}</li>
+            <li><b>Segmentación por hoja:</b> {"Sí (4 arqueros por página)" if usar_segmentacion else "No (1 arquero por página)"}</li>
+            <li><b>Total de peticiones OCR estimadas:</b> <span style="font-size: 1.1em; font-weight: bold; color: #c00000;">{total_peticiones}</span></li>
+            <li><b>Consumo de cuota estimado:</b> {round((total_peticiones / limite_rpm) * 100, 1)}% de tu límite por minuto.</li>
+        </ul>
+        <div style="background-color: #fff; padding: 10px; border-radius: 5px; border: 1px solid #d9e1f2; font-weight: bold; color: #1f497d; display: flex; justify-content: space-between; align-items: center;">
+            <span>⏱️ TIEMPO ESTIMADO TOTAL:</span>
+            <span style="font-size: 1.25em; color: #c00000;">{round(tiempo_total_segundos, 1)} segundos</span>
+        </div>
+        <p style="font-size: 0.85em; color: #595959; margin: 8px 0 0 0; line-height: 1.3;">
+            💡 <i>El sistema procesará con <b>esperas inteligentes automáticas (Rate-Limiting) de 1.6s</b> entre llamadas para no chocar con el límite de 40 RPM.
+            Si el tiempo te parece excesivo, puedes desmarcar cuadrantes en el selector visual para recortar la digitalización antes de presionar el botón de inicio.</i>
+        </p>
+    </div>
+    """
+    return html
+
+
+def actualizar_estimacion_interactiva(file_input, mode_input, selected_targets):
+    return obtener_estimacion_formateada(file_input, mode_input, selected_targets)
+
+# --- CLASES DEL MOTOR OCR EMBEBIDAS PARA EVITAR PROBLEMAS DE IMPORTACIÓN ---
+
+class ArcheryOCR:
+    def __init__(self, api_key=None, model_name="meta/muse-glimmer-30b"):
+        self.api_key = api_key or os.environ.get("NVIDIA_API_KEY")
+        self.model_name = model_name
+        self.api_url = "https://integrate.api.nvidia.com/v1/chat/completions"
+
+    def base64_encode_image(self, image_input):
+        if isinstance(image_input, str):
+            img = Image.open(image_input)
+        elif isinstance(image_input, Image.Image):
+            img = image_input
+        else:
+            raise ValueError("Formato de entrada de imagen no soportado.")
+
+        if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
+            img = img.convert('RGB')
+        elif img.mode != 'RGB':
+            img = img.convert('RGB')
+
+        max_size = 1200
+        if max(img.size) > max_size:
+            img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+
+        buffered = BytesIO()
+        img.save(buffered, format="JPEG", quality=80, optimize=True)
+        return base64.b64encode(buffered.getvalue()).decode("utf-8")
+
+    def _obtener_prompts(self, tipo_planilla):
+        if tipo_planilla == "clasificacion":
+            system_prompt = (
+                "Eres un transcriptor experto en planillas de tiro con arco. Tu tarea es extraer "
+                "con absoluta precisión las puntuaciones y sumas de una planilla de clasificación (Indoor 18m).\n"
+                "La planilla contiene 10 series (rondas) con 3 tiros individuales cada una, su suma parcial, "
+                "el total acumulado, y el conteo de flechas que fueron 10 o 9.\n"
+                "Usa reglas lógicas de tiro con arco:\n"
+                "- Las puntuaciones individuales de flechas válidas son números del 1 al 10, o la letra 'M' (Miss / flecha errada, valor 0).\n"
+                "- Si ves un número ambiguo, ten en cuenta que el campo 'Sum' es la suma de los 3 tiros de esa fila, "
+                "y el campo 'Tot.' es el total acumulado de la fila actual más las anteriores.\n"
+                "- Extrae los totales declarados al final de la planilla (Total de puntos, total de 10s y total de 9s)."
+            )
+            user_prompt = (
+                "Analiza la imagen de la planilla y extrae los datos estructurados en formato JSON.\n"
+                "El JSON resultante debe cumplir ESTRICTAMENTE con este esquema:\n"
+                "{\n"
+                "  \"target\": \"Contención/Diana, ej: 1A\",\n"
+                "  \"archer_name\": \"Nombre del arquero\",\n"
+                "  \"category\": \"Categoría deportiva, ej: Recurvo Masculino (RM)\",\n"
+                "  \"round\": \"Número de Ronda/Turno, ej: 1 o 2\",\n"
+                "  \"rows\": [\n"
+                "    {\n"
+                "      \"series_num\": 1,\n"
+                "      \"shot_1\": \"10\",\n"
+                "      \"shot_2\": \"9\",\n"
+                "      \"shot_3\": \"M\",\n"
+                "      \"sum_declared\": 19,\n"
+                "      \"total_accumulated_declared\": 19,\n"
+                "      \"tens_declared\": 1,\n"
+                "      \"nines_declared\": 1\n"
+                "    }\n"
+                "  ],\n"
+                "  \"total_points_declared\": 247,\n"
+                "  \"total_tens_declared\": 6,\n"
+                "  \"total_nines_declared\": 9\n"
+                "}\n"
+                "Asegúrate de que la lista 'rows' contenga exactamente las 10 series correspondientes de la planilla.\n"
+                "Retorna ÚNICAMENTE el JSON crudo, sin bloques de código ```json ni texto adicional."
+            )
+        elif tipo_planilla == "eliminatoria":
+            system_prompt = (
+                "Eres un transcriptor experto en planillas de tiro con arco de eliminatorias (enfrentamientos directos).\n"
+                "Estas planillas contienen dos arqueros compitiendo en paralelo (izquierdo y derecho).\n"
+                "Identifica qué tipo de juego es:\n"
+                "A) Por Sets (Recurvo y Raso): 3 flechas por set. Cada set otorga 'Set Points' (2 por ganar, 1 por empatar, 0 por perder). "
+                "Gana el primero en llegar a 6 Set Points.\n"
+                "B) Acumulado (Compuesto): 5 series de 3 flechas, donde se suman los puntos de cada flecha acumulativamente.\n"
+                "Extrae los datos individuales de ambos arqueros, incluyendo sus flechas tiro a tiro, las sumas de serie, "
+                "puntos de set parciales y el resultado final."
+            )
+            user_prompt = (
+                "Analiza la planilla de eliminatorias y extrae los datos de ambos arqueros en formato JSON.\n"
+                "El JSON debe tener la siguiente estructura:\n"
+                "{\n"
+                "  \"match_type\": \"set_system\" o \"accumulated\",\n"
+                "  \"archers\": [\n"
+                "    {\n"
+                "      \"position\": \"Posición/Diana, ej: 1 o 2\",\n"
+                "      \"archer_name\": \"Nombre del Arquero\",\n"
+                "      \"club_association\": \"Club, ej: CSCA\",\n"
+                "      \"category\": \"Categoría, ej: Raso Masculino\",\n"
+                "      \"target\": \"Contención, ej: 9A\",\n"
+                "      \"ends\": [\n"
+                "        {\n"
+                "          \"end_num\": 1,\n"
+                "          \"shots\": [\"10\", \"9\", \"8\"],\n"
+                "          \"end_total\": 27,\n"
+                "          \"set_points_declared\": 2,\n"
+                "          \"total_set_points_accumulated\": 2\n"
+                "        }\n"
+                "      ],\n"
+                "      \"final_score_declared\": 6\n"
+                "    }\n"
+                "  ]\n"
+                "}\n"
+                "Retorna ÚNICAMENTE el JSON crudo, sin formato markdown ```json ni explicaciones."
+            )
+        else:
+            raise ValueError(f"Tipo de planilla no soportado: '{tipo_planilla}'")
+        return system_prompt, user_prompt
+
+    def analizar_planilla(self, image_input, tipo_planilla="clasificacion"):
+        if not self.api_key:
+            raise ValueError("Se requiere una API Key de NVIDIA. Por favor configúrala.")
+        base64_image = self.base64_encode_image(image_input)
+        system_prompt, user_prompt = self._obtener_prompts(tipo_planilla)
+        
+        prompt_completo = f"{system_prompt}\n\n{user_prompt}"
+        
+        is_nemotron = "nemotron-ocr" in self.model_name
+        
+        if is_nemotron:
+            self.api_url = f"https://ai.api.nvidia.com/v1/cv/{self.model_name}"
+            headers = {
+                "Authorization": f"Bearer {self.api_key.strip()}",
+                "Content-Type": "application/json",
+                "accept": "application/json"
+            }
+            payload = {
+                "input": [
+                    {
+                        "image": f"data:image/jpeg;base64,{base64_image}",
+                        "text": prompt_completo
+                    }
+                ]
+            }
+        else:
+            headers = {
+                "Authorization": f"Bearer {self.api_key.strip()}",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "model": self.model_name,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt_completo},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}
+                            }
+                        ]
+                    }
+                ],
+                "max_tokens": 4096,
+                "temperature": 0.1,
+                "top_p": 1.0
+            }
+        
+        try:
+            response = requests.post(self.api_url, headers=headers, json=payload, timeout=120)
+            if response.status_code != 200:
+                raise RuntimeError(f"HTTP {response.status_code}: {response.text}")
+            result = response.json()
+            
+            if is_nemotron:
+                if isinstance(result, dict):
+                    if "text" in result:
+                        raw_text = result["text"].strip()
+                    elif "output" in result:
+                        out_val = result["output"]
+                        if isinstance(out_val, str):
+                            raw_text = out_val.strip()
+                        elif isinstance(out_val, list) and len(out_val) > 0:
+                            first_item = out_val[0]
+                            if isinstance(first_item, dict) and "text" in first_item:
+                                raw_text = first_item["text"].strip()
+                            else:
+                                raw_text = str(first_item).strip()
+                        else:
+                            raw_text = str(out_val).strip()
+                    elif "choices" in result:
+                        raw_text = result["choices"][0]["message"]["content"].strip()
+                    else:
+                        raise ValueError(f"Respuesta inesperada de Nemotron OCR: {result}")
+                elif isinstance(result, list) and len(result) > 0:
+                    first_el = result[0]
+                    if isinstance(first_el, dict):
+                        if "text" in first_el:
+                            raw_text = first_el["text"].strip()
+                        elif "output" in first_el:
+                            raw_text = str(first_el["output"]).strip()
+                        else:
+                            raw_text = str(first_el).strip()
+                    else:
+                        raw_text = str(first_el).strip()
+                else:
+                    raise ValueError(f"Respuesta inesperada de Nemotron OCR: {result}")
+            else:
+                if "choices" not in result or not result["choices"]:
+                    raise ValueError(f"Respuesta inesperada de la API de NVIDIA: {result}")
+                raw_text = result["choices"][0]["message"]["content"].strip()
+            
+            # Limpiar bloque <think> de razonamiento si existe en meta/muse-glimmer-30b o similares
+            if "<think>" in raw_text and "</think>" in raw_text:
+                raw_text = raw_text.split("</think>")[-1].strip()
+            
+            # Extraer JSON de forma agresiva
+            import re
+            json_match = re.search(r'(\{.*\})', raw_text, re.DOTALL)
+            if json_match:
+                raw_text = json_match.group(1)
+            else:
+                # Si no hay bloque formal de llaves, limpiar posibles comillas de markdown y probar carga directa
+                if raw_text.startswith("```json"):
+                    raw_text = raw_text[7:]
+                if raw_text.startswith("```"):
+                    raw_text = raw_text[3:]
+                if raw_text.endswith("```"):
+                    raw_text = raw_text[:-3]
+                raw_text = raw_text.strip()
+            
+            try:
+                return json.loads(raw_text)
+            except json.JSONDecodeError as json_err:
+                raise ValueError(f"La respuesta no contiene un JSON estructurado válido. Respuesta cruda del modelo:\n{raw_text}") from json_err
+                
+        except Exception as e:
+            err_str = str(e)
+            err_str_lower = err_str.lower()
+            
+            # Indicios de saturación, caída de pasarela (HTTP 502/503/504), timeout de red o vacíos
+            indicios_saturacion = [
+                "504", "502", "503", "gateway timeout", "bad gateway", "service unavailable",
+                "timed out", "timeout", "nonetype", "strip", "choices", "attributeerror"
+            ]
+            
+            if any(indicio in err_str_lower for indicio in indicios_saturacion):
+                raise RuntimeError(
+                    f"Fallo por saturación del modelo '{self.model_name}' en los servidores de NVIDIA NIM (HTTP 504 / Timeout). "
+                    "Se sugiere probar seleccionando otro modelo de visión en la barra lateral de configuración, "
+                    "como 'step-3.7-flash' o 'minimaxai/minimax-m3', y volver a intentar."
+                ) from e
+                
+            # Propagar un error descriptivo descriptivo normal hacia arriba
+            raise RuntimeError(f"Fallo en llamada a NVIDIA NIM ({self.model_name}): {str(e)}") from e
+class ArcherySegmenter:
+    @staticmethod
+    def segmentar_planilla_4_arqueros(ruta_imagen, carpeta_salida):
+        if not os.path.exists(carpeta_salida):
+            os.makedirs(carpeta_salida)
+        img = Image.open(ruta_imagen)
+        ancho, alto = img.size
+        mitad_x = ancho // 2
+        mitad_y = alto // 2
+        cuadrantes = {
+            "1A": (0, 0, mitad_x, mitad_y),
+            "1B": (mitad_x, 0, ancho, mitad_y),
+            "1C": (0, mitad_y, mitad_x, alto),
+            "1D": (mitad_x, mitad_y, ancho, alto)
+        }
+        recortes = {}
+        for arquero, coords in cuadrantes.items():
+            crop_img = img.crop(coords)
+            ruta_salida = os.path.join(carpeta_salida, f"crop_{arquero}.png")
+            crop_img.save(ruta_salida, "PNG")
+            recortes[arquero] = ruta_salida
+        return recortes
+
+
+class PDFDocumentProcessor:
+    def __init__(self, pdf_path):
+        self.pdf_path = pdf_path
+        if not PDF_SUPPORT:
+            raise ImportError("Se requiere 'pypdfium2' para el procesamiento de PDFs.")
+
+    def exportar_paginas_a_imagenes(self, carpeta_salida, scale=2):
+        if not os.path.exists(carpeta_salida):
+            os.makedirs(carpeta_salida)
+        doc = pdfium.PdfDocument(self.pdf_path)
+        paginas_imagenes = []
+        for i, page in enumerate(doc):
+            bitmap = page.render(scale=scale)
+            pil_img = bitmap.to_pil()
+            ruta_imagen = os.path.join(carpeta_salida, f"pagina_{i + 1}.png")
+            pil_img.save(ruta_imagen, "PNG")
+            paginas_imagenes.append(ruta_imagen)
+        return paginas_imagenes
+
+# --- LÓGICA DE CATEGORÍAS Y AUTOCORRECCIÓN EMBEBIDA ---
+
+def obtener_valores_validos_categoria(categoria_str):
+    import re
+    cat_lower = str(categoria_str).lower()
+    is_escuela = "escuela" in cat_lower or "school" in cat_lower or "infantil" in cat_lower or "junior" in cat_lower or "sub" in cat_lower
+    if re.search(r'\b(e\d+|e)\b', cat_lower):
+        is_escuela = True
+    is_raso = "raso" in cat_lower or "barebow" in cat_lower or "tradicional" in cat_lower or "traditional" in cat_lower or "b 50m" in cat_lower or "bm" in cat_lower or "bw" in cat_lower or "cazador" in cat_lower
+    if is_escuela or is_raso:
+        return [10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
+    else:
+        # Compuesto y Recurvo Estándar (RM/RW, CM/CW)
+        return [10, 9, 8, 7, 6, 0]
+
+def auto_corregir_serie(tiros, sum_declared, category):
+    valores_validos = obtener_valores_validos_categoria(category)
+    valores = []
+    for t in tiros:
+        t_clean = str(t).strip().upper()
+        if t_clean == "M" or t_clean == "" or t_clean == "0":
+            valores.append(0)
+        else:
+            try:
+                valores.append(int(t_clean))
+            except ValueError:
+                valores.append(0)
+                
+    suma_real = sum(valores)
+    diff = sum_declared - suma_real
+    if diff == 0:
+        return tiros, False
+        
+    # Encontrar candidatos de cambio de una sola flecha (Despeje Matemático)
+    candidates = []
+    for i in range(3):
+        v_proposed = valores[i] + diff
+        if v_proposed in valores_validos:
+            candidates.append((i, v_proposed))
+            
+    if not candidates:
+        return tiros, False
+        
+    if len(candidates) == 1:
+        idx, val_new = candidates[0]
+        val_str = "M" if val_new == 0 else str(val_new)
+        tiros_nuevos = list(tiros)
+        tiros_nuevos[idx] = val_str
+        return tiros_nuevos, True
+        
+    # Priorizar según confusiones de OCR comunes para resolver la ambigüedad en el despeje
+    COMMON_CONFUSIONS = {
+        -2: {"from": ["9"], "to": "7"},   # Leyó 9 en vez de 7 (+2 puntos erróneos)
+        2: {"from": ["7"], "to": "9"},    # Leyó 7 en vez de 9 (-2 puntos erróneos)
+        -5: {"from": ["8"], "to": "3"},   # Leyó 8 en vez de 3 (+5 puntos erróneos)
+        5: {"from": ["3"], "to": "8"},    # Leyó 3 en vez de 8 (-5 puntos erróneos)
+        -1: {"from": ["10"], "to": "9"},  # Leyó 10 en vez de 9 (+1 punto erróneo)
+        1: {"from": ["9"], "to": "10"},   # Leyó 9 en vez de 10 (-1 punto erróneo)
+    }
+    
+    scored_candidates = []
+    for idx, val_new in candidates:
+        orig_str = str(tiros[idx]).strip().upper()
+        proposed_str = "M" if val_new == 0 else str(val_new)
+        
+        score = 0
+        if diff in COMMON_CONFUSIONS:
+            conf = COMMON_CONFUSIONS[diff]
+            if orig_str in conf["from"] and proposed_str == conf["to"]:
+                score = 10  # Máxima prioridad de corrección lógica
+                
+        scored_candidates.append((score, idx, proposed_str))
+        
+    scored_candidates.sort(key=lambda x: x[0], reverse=True)
+    best_score, best_idx, best_val_str = scored_candidates[0]
+    
+    tiros_nuevos = list(tiros)
+    tiros_nuevos[best_idx] = best_val_str
+    return tiros_nuevos, True
+
+def validar_matematica_clasificacion(data):
+    discrepancias = []
+    total_flechas_calculado = 0
+    total_dec_total = data.get("total_points_declared", 0)
+    for r in data.get("rows", []):
+        s_num = r.get("series_num")
+        tiros = []
+        for s in [r.get("shot_1"), r.get("shot_2"), r.get("shot_3")]:
+            s_str = str(s).strip().upper() if s is not None else ""
+            if s_str == "M" or s_str == "":
+                tiros.append(0)
+            else:
+                try:
+                    tiros.append(int(s_str))
+                except ValueError:
+                    tiros.append(0)
+        suma_real = sum(tiros)
+        suma_dec = r.get("sum_declared", 0)
+        if suma_real != suma_dec:
+            discrepancias.append(f"Serie {s_num}: Tiros ({suma_real}) != Suma Declarada ({suma_dec})")
+        total_flechas_calculado += suma_real
+    if total_flechas_calculado != total_dec_total:
+        discrepancias.append(f"Total: Suma real ({total_flechas_calculado}) != Total Declarado ({total_dec_total})")
+    if discrepancias:
+        return False, discrepancias
+    return True, "QA Matemático aprobado: Todos los cálculos aritméticos coinciden perfectamente."
+
+def cargar_base_datos(csv_filename):
+    scratch_path = os.path.join("/workspace/scratch/", csv_filename)
+    artifact_path = os.path.join("/workspace/artifacts/", csv_filename)
+    knowledge_path = os.path.join("/workspace/knowledge/", csv_filename)
+    cols = ['Target', 'Archer', 'Category', 'Round', 'Total_Score'] + [f"{s}_{i}" for s in range(1, 11) for i in range(1, 4)]
+    if os.path.exists(scratch_path):
+        return pd.read_csv(scratch_path)
+    elif os.path.exists(artifact_path):
+        os.makedirs(os.path.dirname(scratch_path), exist_ok=True)
+        shutil.copy(artifact_path, scratch_path)
+        return pd.read_csv(scratch_path)
+    elif os.path.exists(knowledge_path):
+        os.makedirs(os.path.dirname(scratch_path), exist_ok=True)
+        shutil.copy(knowledge_path, scratch_path)
+        return pd.read_csv(scratch_path)
+    else:
+        return pd.DataFrame(columns=cols)
+
+def sugerir_correccion_tiros(tiros, suma_dec, category=""):
+    valores_validos = obtener_valores_validos_categoria(category)
+    valores = []
+    for t in tiros:
+        t_clean = str(t).strip().upper()
+        if t_clean == "M" or t_clean == "" or t_clean == "0":
+            valores.append(0)
+        else:
+            try:
+                valores.append(int(t_clean))
+            except ValueError:
+                valores.append(0)
+    suma_real = sum(valores)
+    diff = suma_dec - suma_real
+    if diff == 0:
+        return []
+    sugerencias = []
+    labels = ["Flecha 1", "Flecha 2", "Flecha 3"]
+    for i in range(3):
+        v_nuevo = valores[i] + diff
+        if v_nuevo in valores_validos:
+            val_str = "M" if v_nuevo == 0 else str(v_nuevo)
+            sugerencias.append(f"Cambiar <b>{labels[i]}</b> (leído '{tiros[i]}') por <b>'{val_str}'</b>")
+    return sugerencias
+
+def procesar_archivo_upload(file_input, mode_input, state):
+    global session_crops
+    session_crops.clear()
+    if not state:
+        state = {"transcribed_data": {}, "active_target": None, "csv_filename": "torneo_indoor_san_francisco_detallado.csv"}
+    if file_input is None:
+        return "⚠️ Por favor, sube un archivo válido.", None, gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), state
+    temp_dir = tempfile.mkdtemp()
+    file_path = file_input.name
+    filename = os.path.basename(file_path).lower()
+    base_name = os.path.splitext(os.path.basename(file_path))[0]
+    csv_filename = f"{base_name}.csv"
+    state["csv_filename"] = csv_filename
+    imagenes_a_mostrar = []
+    if filename.endswith(".pdf"):
+        try:
+            pdf_proc = PDFDocumentProcessor(file_path)
+            imagenes_a_mostrar = pdf_proc.exportar_paginas_a_imagenes(temp_dir)
+            gr_msg = f"📄 Archivo PDF cargado. Se renderizaron {len(imagenes_a_mostrar)} páginas. Base de datos de guardado: {csv_filename}"
+            imagen_final = imagenes_a_mostrar[0]
+        except Exception as e:
+            return f"❌ Error al procesar el PDF: {e}", None, gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), state
+    else:
+        imagen_final = file_path
+        gr_msg = f"📸 Imagen '{os.path.basename(file_path)}' cargada con éxito. Base de datos de guardado: {csv_filename}"
+    usar_segmentacion = (mode_input == "Hoja Completa (4 Arqueros)")
+    if mode_input == "Detección Automática" and not filename.endswith(".pdf"):
+        img_temp = Image.open(imagen_final)
+        w, h = img_temp.size
+        if w > 1000 and h > 1000 and (0.7 < (w / h) < 1.4):
+            usar_segmentacion = True
+    if usar_segmentacion:
+        try:
+            crops = ArcherySegmenter.segmentar_planilla_4_arqueros(imagen_final, temp_dir)
+            session_crops = crops
+            gr_msg += " ✂️ Planilla grupal segmentada automáticamente en 4 cuadrantes."
+            return (
+                gr_msg,
+                imagen_final,
+                gr.update(value=crops["1A"], visible=True),
+                gr.update(value=crops["1B"], visible=True),
+                gr.update(value=crops["1C"], visible=True),
+                gr.update(value=crops["1D"], visible=True),
+                gr.update(choices=["1A", "1B", "1C", "1D"], value=["1A", "1B", "1C", "1D"], visible=True),
+                state
+            )
+        except Exception as e:
+            return f"❌ Error en segmentación visual: {e}", imagen_final, gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(choices=["Individual"], value=["Individual"], visible=False), state
+    return (
+        gr_msg,
+        imagen_final,
+        gr.update(visible=False),
+        gr.update(visible=False),
+        gr.update(visible=False),
+        gr.update(visible=False),
+        gr.update(choices=["Individual"], value=["Individual"], visible=False),
+        state
+    )
+
+# Lista ordenada de modelos para OCR (Prueba de resistencia masiva adaptativa)
+FALLBACK_MODELS = [
+    "minimaxai/minimax-m3",         # El más estable y confiable de la suite
+    "meta/muse-glimmer-30b",       # Modelo secundario de razonamiento profundo
+    "nvidia/nemotron-ocr-v2"        # Extractor especializado de tablas de NVIDIA
+]
+
+def ejecutar_ocr_ia_multiple(file_input, selected_targets, model_name_ignored, tipo_planilla, modalidad_val, state):
+    global session_crops
+    if not selected_targets:
+        yield "⚠️ Por favor selecciona al menos un cuadrante para transcribir.", "", "", "", "", 0, None, 0, "", "", gr.update(visible=False), state
+        return
+        
+    if not state:
+        state = {"transcribed_data": {}, "active_target": None, "csv_filename": "torneo_indoor_san_francisco_detallado.csv"}
+    else:
+        state["transcribed_data"] = {}
+        
+    api_key = os.environ.get("NVIDIA_API_KEY", "").strip()
+    if not api_key:
+        err_msg = "❌ Error Crítico: No se encontró la clave NVIDIA_API_KEY configurada en el archivo .env local del servidor. El procesamiento real por OCR no se puede ejecutar."
+        empty_df = pd.DataFrame([[i, "", "", "", 0, 0, 0, 0] for i in range(1, 11)], columns=["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Total Acumulado", "10s", "9s"])
+        status_alert_err = "<div style='background-color: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px; border: 1px solid #f5c6cb; margin-top: 10px; font-weight: bold;'>❌ [ERROR DE CONFIGURACIÓN]: NVIDIA_API_KEY ausente. Por favor, edita tu archivo .env local y colócala allí para activar el OCR.</div>"
+        yield err_msg, "", "", "", "1", 0, empty_df, 0, err_msg, status_alert_err, gr.update(visible=False), state
+        return
+
+    def transcribir_un_target(target):
+        imagen_ocr = file_input.name if file_input else None
+        if session_crops and target in session_crops:
+            imagen_ocr = session_crops[target]
+            
+        last_error = None
+        max_attempts = 2  # Intentar automáticamente hasta 2 veces el ciclo completo si hay fallas de red/saturación
+        for attempt in range(max_attempts):
+            for i, model in enumerate(FALLBACK_MODELS):
+                try:
+                    # Esperar si es necesario para respetar el límite de 25 RPM (concurrente seguro)
+                    api_rate_limiter.wait_if_needed()
+                    
+                    print(f"📡 [Target {target}] Intentando OCR (Intento {attempt+1}/{max_attempts}, Modelo {i+1}/{len(FALLBACK_MODELS)}): {model}...")
+                    ocr_client = ArcheryOCR(api_key=api_key, model_name=model)
+                    data = ocr_client.analizar_planilla(imagen_ocr, tipo_planilla=tipo_planilla)
+                    if data:
+                        print(f"💚 [Target {target}] ¡Éxito con el modelo: {model}!")
+                        return target, data, f"{target} ({model})"
+                    else:
+                        raise ValueError("Respuesta vacía o JSON no estructurado.")
+                except Exception as e:
+                    last_error = str(e)
+                    print(f"⚠️ [Target {target}] Falló con el modelo {model} en intento {attempt+1}. Error: {last_error}")
+            
+            if attempt < max_attempts - 1:
+                print(f"⏱️ [Target {target}] Re-intentando toda la cadena en 3 segundos debido a fallos previos...")
+                time.sleep(3.0)
+                
+        # Si fallaron todos los modelos reales en todos los intentos
+        err_msg = f"Saturación total en NVIDIA NIM. Último error: {last_error}"
+        err_data = {
+            "archer_name": f"ERROR: Fallaron todos los intentos",
+            "target": target,
+            "category": "",
+            "round": "1",
+            "total_points_declared": 0,
+            "rows": []
+        }
+        return target, err_data, f"{target} (❌ Falló)"
+
+    max_hilos = min(len(selected_targets), 4)
+    futures = {}
+    
+    # Lanzar los hilos de procesamiento en paralelo
+    with ThreadPoolExecutor(max_workers=max_hilos) as executor:
+        for target in selected_targets:
+            f = executor.submit(transcribir_un_target, target)
+            futures[f] = target
+            
+        completed_count = 0
+        from concurrent.futures import as_completed
+        
+        # Conforme cada hilo se completa (as_completed), procesamos y enviamos (yield) los resultados inmediatamente
+        for f in as_completed(futures):
+            target = futures[f]
+            try:
+                target_res, data, msg = f.result()
+            except Exception as e:
+                err_data = {
+                    "archer_name": f"ERROR: {str(e)}",
+                    "target": target,
+                    "category": "",
+                    "round": "1",
+                    "total_points_declared": 0,
+                    "rows": []
+                }
+                target_res, data, msg = target, err_data, f"{target} (❌ Falló)"
+                
+            completed_count += 1
+            category = data.get("category", "")
+            
+            # Calcular la suma parcial acumulada fila por fila (Total Acumulado)
+            cumulative_sum = 0
+            rows_list = []
+            for r in data.get("rows", []):
+                series_num = int(r.get("series_num"))
+                shots = [str(r.get("shot_1", "")), str(r.get("shot_2", "")), str(r.get("shot_3", ""))]
+                sum_dec = int(r.get("sum_declared", 0))
+                corrected_shots, corrected = auto_corregir_serie(shots, sum_dec, category)
+                cumulative_sum += sum_dec
+                
+                rows_list.append([
+                    series_num,
+                    corrected_shots[0],
+                    corrected_shots[1],
+                    corrected_shots[2],
+                    sum_dec,
+                    cumulative_sum,
+                    int(r.get("tens_declared", 0)),
+                    int(r.get("nines_declared", 0))
+                ])
+                
+            if not rows_list:
+                rows_list = [[i, "", "", "", 0, 0, 0, 0] for i in range(1, 11)]
+                
+            # Determinar títulos de columnas según la modalidad (Indoor 10s/9s vs Outdoor Xs/10s)
+            cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Total Acumulado", "10s", "9s"]
+            if modalidad_val == "Aire Libre (Outdoor)":
+                cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Total Acumulado", "Xs", "10s"]
+                
+            df_target = pd.DataFrame(rows_list, columns=cols)
+            
+            # Renombrado de target dinámico
+            real_key = data.get("target", target) if target == "Individual" else target
+            real_key = str(real_key).strip().upper() if real_key else target
+            if real_key:
+                real_key_clean = real_key.strip().upper()
+                if "CONTENCION" in real_key_clean or "DIANA" in real_key_clean or "EJ:" in real_key_clean or len(real_key_clean) > 5:
+                    real_key = target
+                    
+            state["transcribed_data"][real_key] = {
+                "archer_name": data.get("archer_name", ""),
+                "target": real_key,
+                "category": category,
+                "round": data.get("round", "1"),
+                "total_points_declared": int(data.get("total_points_declared", 0)),
+                "df_editor": df_target
+            }
+            
+            # El primer target disponible en la sesión se convierte en el arquero visible
+            all_targets = sorted(list(state["transcribed_data"].keys()))
+            primer_target_real = all_targets[0]
+            state["active_target"] = primer_target_real
+            active_data = state["transcribed_data"][primer_target_real]
+            
+            # Formatear el reporte de progreso de ejecución
+            progreso_lista = []
+            for t in all_targets:
+                name = state["transcribed_data"][t].get("archer_name", "")
+                if name.startswith("ERROR:"):
+                    progreso_lista.append(f"{t} (❌ Falló)")
+                else:
+                    progreso_lista.append(f"{t} (🟢 Completado)")
+                    
+            info_msg = f"⏳ [PROCESANDO {completed_count}/{len(selected_targets)}] Estado actual de la hoja: {', '.join(progreso_lista)}"
+            if completed_count == len(selected_targets):
+                info_msg = f"🎉 [PROCESADO COMPLETO CON OCR REAL] Resultado de ejecución: {', '.join(progreso_lista)}"
+                
+            # Validar matemáticamente los datos del arquero activo para el bloque de información
+            total_calc, qa_report, status_alert = realizar_validacion_aritmetica(active_data["df_editor"], active_data["total_points_declared"], active_data["category"])
+            
+            dropdown_update = gr.update(
+                choices=all_targets,
+                value=primer_target_real,
+                visible=True if len(all_targets) > 0 else False
+            )
+            
+            yield (
+                info_msg,
+                active_data["archer_name"],
+                active_data["target"],
+                active_data["category"],
+                active_data["round"],
+                active_data["total_points_declared"],
+                active_data["df_editor"],
+                total_calc,
+                qa_report,
+                status_alert,
+                dropdown_update,
+                state
+            )
+
+def cambiar_arquero_activo(target_nuevo, state, nombre_actual, target_actual, cat_actual, ronda_actual, total_dec_actual, df_actual):
+    if not state or "transcribed_data" not in state:
+        return state, nombre_actual, target_actual, cat_actual, ronda_actual, total_dec_actual, df_actual, 0, "", ""
+    target_viejo = state.get("active_target")
+    if target_viejo and target_viejo in state["transcribed_data"]:
+        state["transcribed_data"][target_viejo] = {
+            "archer_name": nombre_actual,
+            "target": target_actual,
+            "category": cat_actual,
+            "round": ronda_actual,
+            "total_points_declared": int(total_dec_actual if total_dec_actual else 0),
+            "df_editor": df_actual
+        }
+    state["active_target"] = target_nuevo
+    data_nueva = state["transcribed_data"].get(target_nuevo, {})
+    nombre_nuevo = data_nueva.get("archer_name", "")
+    target_nuevo_val = data_nueva.get("target", target_nuevo)
+    cat_nueva = data_nueva.get("category", "")
+    ronda_nueva = data_nueva.get("round", "1")
+    total_dec_nuevo = data_nueva.get("total_points_declared", 0)
+    df_nuevo = data_nueva.get("df_editor")
+    if df_nuevo is None:
+        rows_list = [[i, "", "", "", 0, 0, 0, 0] for i in range(1, 11)]
+        cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Total Acumulado", "10s", "9s"]
+        if "X" in str(cat_nueva).upper():
+            cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Total Acumulado", "Xs", "10s"]
+        df_nuevo = pd.DataFrame(rows_list, columns=cols)
+    total_calc, qa_report, status_alert = realizar_validacion_aritmetica(df_nuevo, total_dec_nuevo, cat_nueva)
+    return (
+        state,
+        nombre_nuevo,
+        target_nuevo_val,
+        cat_nueva,
+        ronda_nueva,
+        total_dec_nuevo,
+        df_nuevo,
+        total_calc,
+        qa_report,
+        status_alert
+    )
+
+
+
+def reintentar_fallidos_ia(file_input, model_name_ignored, tipo_planilla, modalidad_val, state):
+    global session_crops
+    if not state or "transcribed_data" not in state or not state["transcribed_data"]:
+        yield "⚠️ No hay transcripciones previas en esta sesión para reintentar.", "", "", "", "", 0, None, 0, "", "", gr.update(visible=False), state
+        return
+
+    # Identificar cuadrantes que fallaron (su nombre de arquero empieza con 'ERROR:' o está vacío)
+    failed_targets = []
+    for target, data in state["transcribed_data"].items():
+        name = data.get("archer_name", "").strip()
+        if name.startswith("ERROR:") or name == "ERROR: Fallaron todos los modelos" or name == "ERROR: Fallaron todos los intentos" or not name:
+            failed_targets.append(target)
+            
+    if not failed_targets:
+        yield "🟢 Todos los cuadrantes de esta sesión se transcribieron correctamente. ¡No hay fallas que reintentar!", "", "", "", "", 0, None, 0, "", "", gr.update(visible=False), state
+        return
+
+    api_key = os.environ.get("NVIDIA_API_KEY", "").strip()
+    if not api_key:
+        err_msg = "❌ Error Crítico: No se encontró la clave NVIDIA_API_KEY configurada en el archivo .env local."
+        empty_df = pd.DataFrame([[i, "", "", "", 0, 0, 0, 0] for i in range(1, 11)], columns=["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Total Acumulado", "10s", "9s"])
+        status_alert_err = "<div style='background-color: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px; border: 1px solid #f5c6cb; margin-top: 10px; font-weight: bold;'>❌ [ERROR DE CONFIGURACIÓN]: NVIDIA_API_KEY ausente.</div>"
+        yield err_msg, "", "", "", "1", 0, empty_df, 0, err_msg, status_alert_err, gr.update(visible=False), state
+        return
+
+    def transcribir_un_target(target):
+        imagen_ocr = file_input.name if file_input else None
+        if session_crops and target in session_crops:
+            imagen_ocr = session_crops[target]
+            
+        last_error = None
+        max_attempts = 2
+        for attempt in range(max_attempts):
+            for i, model in enumerate(FALLBACK_MODELS):
+                try:
+                    api_rate_limiter.wait_if_needed()
+                    print(f"📡 [Reintento - Target {target}] Intentando OCR (Intento {attempt+1}/{max_attempts}, Modelo {i+1}/{len(FALLBACK_MODELS)}): {model}...")
+                    ocr_client = ArcheryOCR(api_key=api_key, model_name=model)
+                    data = ocr_client.analizar_planilla(imagen_ocr, tipo_planilla=tipo_planilla)
+                    if data:
+                        print(f"💚 [Reintento - Target {target}] ¡Éxito con el modelo: {model}!")
+                        return target, data, f"{target} ({model} - Recuperado)"
+                    else:
+                        raise ValueError("Respuesta vacía o JSON no estructurado.")
+                except Exception as e:
+                    last_error = str(e)
+                    print(f"⚠️ [Reintento - Target {target}] Falló con el modelo {model}. Error: {last_error}")
+            
+            if attempt < max_attempts - 1:
+                print(f"⏱️ [Reintento - Target {target}] Re-intentando toda la cadena en 3 segundos...")
+                time.sleep(3.0)
+                
+        err_msg_failed = f"Saturación total en NVIDIA NIM. Último error: {last_error}"
+        err_data = {
+            "archer_name": f"ERROR: Fallaron todos los intentos",
+            "target": target,
+            "category": "",
+            "round": "1",
+            "total_points_declared": 0,
+            "rows": []
+        }
+        return target, err_data, f"{target} (❌ Falló reintento)"
+
+    max_hilos = min(len(failed_targets), 4)
+    futures = {}
+    
+    with ThreadPoolExecutor(max_workers=max_hilos) as executor:
+        for target in failed_targets:
+            f = executor.submit(transcribir_un_target, target)
+            futures[f] = target
+            
+        completed_count = 0
+        from concurrent.futures import as_completed
+        
+        for f in as_completed(futures):
+            target = futures[f]
+            try:
+                target_res, data, msg = f.result()
+            except Exception as e:
+                err_data = {
+                    "archer_name": f"ERROR: {str(e)}",
+                    "target": target,
+                    "category": "",
+                    "round": "1",
+                    "total_points_declared": 0,
+                    "rows": []
+                }
+                target_res, data, msg = target, err_data, f"{target} (❌ Falló)"
+                
+            completed_count += 1
+            category = data.get("category", "")
+            
+            # Calcular suma parcial acumulada fila por fila
+            cumulative_sum = 0
+            rows_list = []
+            for r in data.get("rows", []):
+                series_num = int(r.get("series_num"))
+                shots = [str(r.get("shot_1", "")), str(r.get("shot_2", "")), str(r.get("shot_3", ""))]
+                sum_dec = int(r.get("sum_declared", 0))
+                corrected_shots, corrected = auto_corregir_serie(shots, sum_dec, category)
+                cumulative_sum += sum_dec
+                rows_list.append([
+                    series_num,
+                    corrected_shots[0],
+                    corrected_shots[1],
+                    corrected_shots[2],
+                    sum_dec,
+                    cumulative_sum,
+                    int(r.get("tens_declared", 0)),
+                    int(r.get("nines_declared", 0))
+                ])
+                
+            if not rows_list:
+                rows_list = [[i, "", "", "", 0, 0, 0, 0] for i in range(1, 11)]
+                
+            cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Total Acumulado", "10s", "9s"]
+            if modalidad_val == "Aire Libre (Outdoor)":
+                cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Total Acumulado", "Xs", "10s"]
+                
+            df_target = pd.DataFrame(rows_list, columns=cols)
+            
+            # Renombrado de target dinámico
+            real_key = data.get("target", target) if target == "Individual" else target
+            real_key = str(real_key).strip().upper() if real_key else target
+            if real_key:
+                real_key_clean = real_key.strip().upper()
+                if "CONTENCION" in real_key_clean or "DIANA" in real_key_clean or "EJ:" in real_key_clean or len(real_key_clean) > 5:
+                    real_key = target
+                    
+            if target != real_key and target in state["transcribed_data"]:
+                del state["transcribed_data"][target]
+                
+            state["transcribed_data"][real_key] = {
+                "archer_name": data.get("archer_name", ""),
+                "target": real_key,
+                "category": category,
+                "round": data.get("round", "1"),
+                "total_points_declared": int(data.get("total_points_declared", 0)),
+                "df_editor": df_target
+            }
+            
+            # Seleccionar el primer objetivo recuperado como activo para la UI
+            all_targets = sorted(list(state["transcribed_data"].keys()))
+            primer_target_reintentado = all_targets[0]
+            state["active_target"] = primer_target_reintentado
+            active_data = state["transcribed_data"][primer_target_reintentado]
+            
+            reporte_status_actualizado = []
+            for t in all_targets:
+                name = state["transcribed_data"][t].get("archer_name", "")
+                if name.startswith("ERROR:"):
+                    reporte_status_actualizado.append(f"{t} (❌ Falló)")
+                else:
+                    reporte_status_actualizado.append(f"{t} (🟢 Transcribido)")
+                    
+            info_msg = f"⏳ [REINTENTANDO {completed_count}/{len(failed_targets)}] Estado actual de la hoja: {', '.join(reporte_status_actualizado)}"
+            if completed_count == len(failed_targets):
+                info_msg = f"🔄 [REINTENTO COMPLETADO] Estado actual de la hoja: {', '.join(reporte_status_actualizado)}"
+                
+            total_calc, qa_report, status_alert = realizar_validacion_aritmetica(active_data["df_editor"], active_data["total_points_declared"], active_data["category"])
+            
+            dropdown_update = gr.update(
+                choices=all_targets,
+                value=primer_target_reintentado,
+                visible=True if len(all_targets) > 0 else False
+            )
+            
+            yield (
+                info_msg,
+                active_data["archer_name"],
+                active_data["target"],
+                active_data["category"],
+                active_data["round"],
+                active_data["total_points_declared"],
+                active_data["df_editor"],
+                total_calc,
+                qa_report,
+                status_alert,
+                dropdown_update,
+                state
+            )
+
+def realizar_validacion_aritmetica(df, total_declarado, category=""):
+    total_calculado = 0
+    discrepancias_series = []
+    for _, row in df.iterrows():
+        suma_serie = 0
+        num_serie = int(row.iloc[0])
+        tiros_str = [str(row.iloc[1]), str(row.iloc[2]), str(row.iloc[3])]
+        for val in tiros_str:
+            val_clean = val.strip().upper()
+            if val_clean == "M" or val_clean == "":
+                puntos = 0
+            else:
+                try:
+                    puntos = int(val_clean)
+                except ValueError:
+                    puntos = 0
+            suma_serie += puntos
+        total_calculado += suma_serie
+        
+        try:
+            suma_dec = int(row.iloc[4])
+        except (ValueError, TypeError, IndexError):
+            suma_dec = 0
+            
+        if suma_serie != suma_dec:
+            sugerencias = sugerir_correccion_tiros(tiros_str, suma_dec, category)
+            s_text = ""
+            if sugerencias:
+                s_text = "<br>&nbsp;&nbsp;&nbsp;&nbsp;💡 <b>Sugerencia de Autocorrección:</b> " + " o ".join([f"<u>{s}</u>" for s in sugerencias])
+            discrepancias_series.append(
+                f"❌ <b>Serie #{num_serie}:</b> Suma aritmética ({suma_serie}) != Suma declarada ({suma_dec}) [Tiros: {row.iloc[1]}, {row.iloc[2]}, {row.iloc[3]}]" + s_text
+            )
+            
+    try:
+        tot_dec = int(total_declarado)
+    except (ValueError, TypeError):
+        tot_dec = 0
+        
+    if total_calculado != tot_dec:
+        discrepancias_series.append(f"❌ <b>Total General:</b> La suma real calculada ({total_calculado}) difiere del total general escrito ({tot_dec}).")
+    if total_calculado == tot_dec and len(discrepancias_series) == 0:
+        status_alert = "<div style='background-color: #d4edda; color: #155724; padding: 15px; border-radius: 5px; border: 1px solid #c3e6cb; margin-top: 10px; font-weight: bold;'>💚 [CONCORDANCIA ABSOLUTA]: Todos los tiros individuales y sumas parciales coinciden perfectamente de forma lógica.</div>"
+        reporte_md = "🟢 Todos los controles aritméticos pasaron satisfactoriamente."
+    else:
+        status_alert = "<div style='background-color: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px; border: 1px solid #f5c6cb; margin-top: 10px; font-weight: bold;'>⚠️ [DISCREPANCIAS DETECTADAS]: El sistema detectó sumas inconsistentes. Sigue las sugerencias para corregir.</div>"
+        reporte_md = "<br>".join(discrepancias_series)
+    return total_calculado, reporte_md, status_alert
+
+def recalcular_interactivo(df, total_dec, target_activo, state):
+    category = ""
+    if state and "transcribed_data" in state and target_activo in state["transcribed_data"]:
+        category = state["transcribed_data"][target_activo].get("category", "")
+        
+    # Recalcular Total Acumulado dinámicamente según la Suma de cada Serie
+    cumulative_sum = 0
+    new_rows = []
+    for idx, row in df.iterrows():
+        try:
+            sum_dec = int(row.iloc[4])
+        except (ValueError, TypeError):
+            sum_dec = 0
+        cumulative_sum += sum_dec
+        row.iloc[5] = cumulative_sum
+        new_rows.append(row)
+        
+    df = pd.DataFrame(new_rows)
+    
+    total_calc, qa_report, status_alert = realizar_validacion_aritmetica(df, total_dec, category)
+    if state and "transcribed_data" in state and target_activo in state["transcribed_data"]:
+        state["transcribed_data"][target_activo]["df_editor"] = df
+        state["transcribed_data"][target_activo]["total_points_declared"] = int(total_dec if total_dec else 0)
+    return total_calc, qa_report, status_alert, df, state
+
+def guardar_datos_individuales(archer_name, target, category, ronda, total_declarado, df, state):
+    if not archer_name:
+        return "⚠️ Por favor ingresa el nombre del arquero antes de guardar."
+    csv_filename = "torneo_indoor_san_francisco_detallado.csv"
+    if state and "csv_filename" in state:
+        csv_filename = state["csv_filename"]
+    try:
+        db_df = cargar_base_datos(csv_filename)
+        fila = {
+            "Target": target,
+            "Archer": archer_name,
+            "Category": category,
+            "Round": int(ronda) if ronda else 1,
+            "Total_Score": int(total_declarado)
+        }
+        for _, row in df.iterrows():
+            s_num = int(row["Serie"])
+            fila[f"{s_num}_1"] = row["Tiro 1"]
+            fila[f"{s_num}_2"] = row["Tiro 2"]
+            fila[f"{s_num}_3"] = row["Tiro 3"]
+        nuevo_df_fila = pd.DataFrame([fila])
+        if not db_df.empty:
+            mask = (db_df["Archer"] == archer_name) & (db_df["Round"] == int(ronda if ronda else 1))
+            if mask.any():
+                db_df = db_df[~mask]
+            db_df = pd.concat([db_df, nuevo_df_fila], ignore_index=True)
+        else:
+            db_df = nuevo_df_fila
+        scratch_path = os.path.join("/workspace/scratch/", csv_filename)
+        os.makedirs(os.path.dirname(scratch_path), exist_ok=True)
+        db_df.to_csv(scratch_path, index=False)
+        out_path = os.path.join("/workspace/out/", csv_filename)
+        shutil.copy(scratch_path, out_path)
+        return f"💾 ¡Datos de '{archer_name}' guardados con éxito en la base de datos descargable '{csv_filename}'!"
+    except Exception as e:
+        return f"❌ Error al guardar datos: {e}"
+
+def guardar_todos_los_datos_state(state):
+    if not state or "transcribed_data" not in state or not state["transcribed_data"]:
+        return "⚠️ No hay datos de sesión para guardar en bloque."
+    csv_filename = state.get("csv_filename", "torneo_indoor_san_francisco_detallado.csv")
+    try:
+        db_df = cargar_base_datos(csv_filename)
+        guardados = []
+        for target, data in state["transcribed_data"].items():
+            archer_name = data.get("archer_name", "").strip()
+            if not archer_name or archer_name.startswith("ERROR"):
+                continue
+            ronda = data.get("round", "1")
+            category = data.get("category", "")
+            total_dec = data.get("total_points_declared", 0)
+            df = data.get("df_editor")
+            fila = {
+                "Target": target,
+                "Archer": archer_name,
+                "Category": category,
+                "Round": int(ronda) if ronda else 1,
+                "Total_Score": int(total_dec)
+            }
+            for _, row in df.iterrows():
+                s_num = int(row["Serie"])
+                fila[f"{s_num}_1"] = row["Tiro 1"]
+                fila[f"{s_num}_2"] = row["Tiro 2"]
+                fila[f"{s_num}_3"] = row["Tiro 3"]
+            nuevo_df_fila = pd.DataFrame([fila])
+            if not db_df.empty:
+                mask = (db_df["Archer"] == archer_name) & (db_df["Round"] == int(ronda if ronda else 1))
+                if mask.any():
+                    db_df = db_df[~mask]
+                db_df = pd.concat([db_df, nuevo_df_fila], ignore_index=True)
+            else:
+                db_df = nuevo_df_fila
+            guardados.append(archer_name)
+        if guardados:
+            scratch_path = os.path.join("/workspace/scratch/", csv_filename)
+            os.makedirs(os.path.dirname(scratch_path), exist_ok=True)
+            db_df.to_csv(scratch_path, index=False)
+            out_path = os.path.join("/workspace/out/", csv_filename)
+            shutil.copy(scratch_path, out_path)
+            return f"💾 ¡Guardado masivo completado! Sincronizados {len(guardados)} arquero(s): {', '.join(guardados)} en '{csv_filename}'."
+        else:
+            return "⚠️ Ninguno de los arqueros procesados tiene un nombre válido asignado."
+    except Exception as e:
+        return f"❌ Error en guardado masivo: {e}"
+
+# --- DISEÑO DE LA INTERFAZ GRADIO ---
+with gr.Blocks(title="🎯 Parser de Tiro con Arco - Gradio App v26") as demo:
+    session_state = gr.State(value={"transcribed_data": {}, "active_target": None, "csv_filename": "torneo_indoor_san_francisco_detallado.csv"})
+    gr.Markdown("# 🎯 Parser de Tiro con Arco - Transcripción e IA Adaptativa (v26 Streaming & Despeje)")
+    gr.Markdown("Sube una planilla de clasificación oficial (PDF o Imagen). El sistema segmentará cuadrantes automáticamente y ejecutará el OCR real en paralelo (ThreadPool) con NVIDIA NIM.")
+
+    with gr.Row():
+        with gr.Column(scale=1):
+            gr.Markdown("### 🔑 Configuración del Sistema")
+            gr.Markdown("ℹ️ <i>NVIDIA_API_KEY se lee automáticamente de forma segura en el backend desde tu archivo .env local. No se expone en la interfaz para prevenir vulnerabilidades de inspección.</i>")
+            model_select = gr.Textbox(label="⚙️ Modelo OCR de Resistencia (Estable)", value="minimaxai/minimax-m3 (Modelos fallidos comentados)", interactive=False, info="Se han desactivado temporalmente los modelos inestables o dados de baja. El procesamiento de los arqueros se realizará exclusivamente con minimaxai/minimax-m3 para probar su resistencia en lote.")
+            planilla_type = gr.Dropdown(label="Tipo de Planilla", choices=["clasificacion", "eliminatoria"], value="clasificacion")
+            modalidad_type = gr.Dropdown(label="Modalidad de Competición", choices=["Sala (Indoor 18m)", "Aire Libre (Outdoor)"], value="Sala (Indoor 18m)")
+            mode_select = gr.Dropdown(label="Segmentación Visual", choices=["Detección Automática", "Planilla Individual (1 Arquero)", "Hoja Completa (4 Arqueros)"], value="Detección Automática")
+            file_uploader = gr.File(label="Cargar Planilla Escaneada o PDF", file_types=[".png", ".jpg", ".jpeg", ".pdf"])
+            upload_status = gr.Markdown(value="Esperando archivo...")
+            quota_estimation_box = gr.HTML(value="<div style='color: #856404; background-color: #fff3cd; border: 1px solid #ffeeba; padding: 10px; border-radius: 5px; font-weight: bold;'>⚠️ Sube una planilla para estimar el consumo de cuota.</div>")
+
+        with gr.Column(scale=2):
+            gr.Markdown("### 🖼 Visualizador")
+            original_image_viewer = gr.Image(label="Imagen Cargada / Renderizada", interactive=False)
+            with gr.Group() as crops_group:
+                gr.Markdown("#### ✂️ Segmentación por Cuadrantes (Pillow)")
+                with gr.Row():
+                    crop_1a = gr.Image(label="Arquero 1A", interactive=False, height=220)
+                    crop_1b = gr.Image(label="Arquero 1B", interactive=False, height=220)
+                with gr.Row():
+                    crop_1c = gr.Image(label="Arquero 1C", interactive=False, height=220)
+                    crop_1d = gr.Image(label="Arquero 1D", interactive=False, height=220)
+            targets_to_process = gr.CheckboxGroup(label="🎯 Cuadrantes a Transcribir simultáneamente con IA (Ejecución en Paralelo)", choices=["1A", "1B", "1C", "1D"], value=["1A", "1B", "1C", "1D"], visible=False)
+
+    gr.Markdown("---")
+    with gr.Row():
+        ocr_button = gr.Button("🤖 Ejecutar OCR Inteligente Paralelo Simultáneo (NVIDIA NIM)", variant="primary")
+        ocr_retry_failed_button = gr.Button("🔄 Reintentar Cuadrantes Fallidos", variant="secondary")
+    ocr_status_msg = gr.Markdown()
+    gr.Markdown("---")
+    active_target_viewer = gr.Dropdown(label="👤 Ver / Editar Datos del Arquero Activo", choices=[], visible=False, interactive=True)
+
+    with gr.Row():
+        with gr.Column(scale=1):
+            gr.Markdown("### 📋 Datos Generales (Editables)")
+            archer_name_box = gr.Textbox(label="Nombre del Arquero")
+            target_box = gr.Textbox(label="Diana / Target")
+            category_box = gr.Textbox(label="Categoría Deportiva")
+            round_box = gr.Textbox(label="Ronda")
+            total_declared_box = gr.Number(label="Total Declarado en Planilla", precision=0)
+
+        with gr.Column(scale=2):
+            gr.Markdown("### ✍️ Consola de Edición de Tiros (Tipo Excel)")
+            df_editor = gr.Dataframe(
+                headers=["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Total Acumulado", "10s", "9s"],
+                datatype=["number", "str", "str", "str", "number", "number", "number", "number"],
+                row_count=10,
+                column_count=(8, "fixed"),
+                interactive=True,
+                label="Grilla de Puntuaciones (10 Series)"
+            )
+
+    gr.Markdown("---")
+    with gr.Row():
+        with gr.Column(scale=1):
+            recalculate_btn = gr.Button("📊 Recalcular y Validar Matemáticas", variant="secondary")
+            total_calculated_box = gr.Number(label="Suma Real Calculada", interactive=False)
+        with gr.Column(scale=2):
+            validation_alert_box = gr.HTML()
+            discrepancy_report_box = gr.Markdown()
+
+    gr.Markdown("---")
+    with gr.Row():
+        save_btn_individual = gr.Button("💾 Guardar Arquero Visible", variant="secondary")
+        save_btn_massive = gr.Button("💾 Guardar TODOS los Arqueros Procesados", variant="primary")
+    save_status_msg = gr.Markdown()
+
+    # --- VÍNCULOS DE EVENTOS ---
+    file_uploader.change(
+        fn=procesar_archivo_upload,
+        inputs=[file_uploader, mode_select, session_state],
+        outputs=[upload_status, original_image_viewer, crop_1a, crop_1b, crop_1c, crop_1d, targets_to_process, session_state]
+    ).then(
+        fn=actualizar_estimacion_interactiva,
+        inputs=[file_uploader, mode_select, targets_to_process],
+        outputs=[quota_estimation_box]
+    )
+    
+    mode_select.change(
+        fn=actualizar_estimacion_interactiva,
+        inputs=[file_uploader, mode_select, targets_to_process],
+        outputs=[quota_estimation_box]
+    )
+    
+    targets_to_process.change(
+        fn=actualizar_estimacion_interactiva,
+        inputs=[file_uploader, mode_select, targets_to_process],
+        outputs=[quota_estimation_box]
+    )
+    ocr_button.click(fn=ejecutar_ocr_ia_multiple, inputs=[file_uploader, targets_to_process, model_select, planilla_type, modalidad_type, session_state], outputs=[ocr_status_msg, archer_name_box, target_box, category_box, round_box, total_declared_box, df_editor, total_calculated_box, discrepancy_report_box, validation_alert_box, active_target_viewer, session_state])
+    ocr_retry_failed_button.click(
+        fn=reintentar_fallidos_ia,
+        inputs=[file_uploader, model_select, planilla_type, session_state],
+        outputs=[ocr_status_msg, archer_name_box, target_box, category_box, round_box, total_declared_box, df_editor, total_calculated_box, discrepancy_report_box, validation_alert_box, active_target_viewer, session_state]
+    )
+    active_target_viewer.change(
+        fn=cambiar_arquero_activo,
+        inputs=[active_target_viewer, session_state, archer_name_box, target_box, category_box, round_box, total_declared_box, df_editor],
+        outputs=[session_state, archer_name_box, target_box, category_box, round_box, total_declared_box, df_editor, total_calculated_box, discrepancy_report_box, validation_alert_box]
+    )
+    recalculate_btn.click(
+        fn=recalcular_interactivo,
+        inputs=[df_editor, total_declared_box, active_target_viewer, session_state],
+        outputs=[total_calculated_box, discrepancy_report_box, validation_alert_box, df_editor, session_state]
+    )
+    save_btn_individual.click(
+        fn=guardar_datos_individuales,
+        inputs=[archer_name_box, target_box, category_box, round_box, total_declared_box, df_editor, session_state],
+        outputs=[save_status_msg]
+    )
+    save_btn_massive.click(
+        fn=guardar_todos_los_datos_state,
+        inputs=[session_state],
+        outputs=[save_status_msg]
+    )
+
+if __name__ == "__main__":
+    print("=" * 60)
+    print("🚀 Iniciando Interfaz Local de Procesamiento de Arquería (Gradio Standalone - v24)")
+    print("🌍 Abre tu navegador en: http://localhost:7860")
+    print("=" * 60)
+    demo.launch(server_name="0.0.0.0", server_port=7860, share=False, theme=gr.themes.Default())
