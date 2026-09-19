@@ -1,0 +1,19 @@
+# Requerimientos para la aplicación de Tiro con Arco
+# Generado automáticamente a partir de app_tiro_con_arco-v32.py
+
+# Manipulación de datos
+pandas
+numpy
+
+# Interfaz gráfica web
+gradio>=4.0.0
+
+# Procesamiento de imágenes
+Pillow
+opencv-python
+
+# Peticiones HTTP para la API de NVIDIA
+requests
+
+# Soporte para archivos PDF (opcional pero recomendado)
+pypdfium2

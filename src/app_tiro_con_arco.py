@@ -42,6 +42,7 @@ from concurrent.futures import ThreadPoolExecutor
 import threading
 import time
 import re
+import cv2
 
 # Intentar pypdfium2 para PDFs
 try:
@@ -71,7 +72,7 @@ class RateLimiter:
                 time.sleep(sleep_time)
             self.last_request_time = time.time()
 
-api_rate_limiter = RateLimiter(requests_per_minute=25)
+api_rate_limiter = RateLimiter(requests_per_minute=20)
 
 
 def obtener_estimacion_formateada(file_input, mode_input, selected_targets):
@@ -148,6 +149,38 @@ def obtener_estimacion_formateada(file_input, mode_input, selected_targets):
 def actualizar_estimacion_interactiva(file_input, mode_input, selected_targets):
     return obtener_estimacion_formateada(file_input, mode_input, selected_targets)
 
+
+def preprocesar_imagen_para_ocr(image_input):
+    """Aplica filtros de OpenCV (Grises, CLAHE y contraste) para limpiar la imagen antes de enviar a la IA."""
+    try:
+        if isinstance(image_input, str):
+            img = cv2.imread(image_input)
+        elif isinstance(image_input, Image.Image):
+            img = cv2.cvtColor(np.array(image_input), cv2.COLOR_RGB2BGR)
+        elif isinstance(image_input, np.ndarray):
+            img = image_input.copy()
+        else:
+            return image_input
+
+        if img is None:
+            return image_input
+
+        # Convertir a escala de grises
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        
+        # CLAHE (Contrast Limited Adaptive Histogram Equalization)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        enhanced = clahe.apply(gray)
+        
+        # Devolver como PIL Image RGB
+        return Image.fromarray(enhanced).convert("RGB")
+    except Exception as e:
+        print(f"⚠️ Warning: No se pudo aplicar preprocesamiento OpenCV: {e}")
+        if isinstance(image_input, str):
+            return Image.open(image_input)
+        return image_input
+
+
 # --- CLASES DEL MOTOR OCR EMBEBIDAS PARA EVITAR PROBLEMAS DE IMPORTACIÓN ---
 
 class ArcheryOCR:
@@ -157,12 +190,14 @@ class ArcheryOCR:
         self.api_url = "https://integrate.api.nvidia.com/v1/chat/completions"
 
     def base64_encode_image(self, image_input):
-        if isinstance(image_input, str):
-            img = Image.open(image_input)
-        elif isinstance(image_input, Image.Image):
-            img = image_input
-        else:
-            raise ValueError("Formato de entrada de imagen no soportado.")
+        img = preprocesar_imagen_para_ocr(image_input)
+        if not isinstance(img, Image.Image):
+            if isinstance(image_input, str):
+                img = Image.open(image_input)
+            elif isinstance(image_input, Image.Image):
+                img = image_input
+            else:
+                raise ValueError("Formato de entrada de imagen no soportado.")
 
         if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
             img = img.convert('RGB')
@@ -304,7 +339,7 @@ class ArcheryOCR:
                     }
                 ],
                 "max_tokens": 4096,
-                "temperature": 0.1,
+                "temperature": 0.0,
                 "top_p": 1.0
             }
         
@@ -397,6 +432,83 @@ class ArcheryOCR:
             raise RuntimeError(f"Fallo en llamada a NVIDIA NIM ({self.model_name}): {str(e)}") from e
 class ArcherySegmenter:
     @staticmethod
+    def analizar_layout_y_ocupacion(ruta_imagen):
+        """
+        Analiza dinámicamente la imagen abriéndola con Pillow y procesándola con OpenCV para detectar:
+        1. Cantidad de arqueros en la planilla (4 o 1).
+        2. Cuadrantes activos/ocupados (descarta cuadrantes vacíos/blancos).
+        """
+        try:
+            import cv2
+            from PIL import Image
+            import numpy as np
+            import os
+            
+            # Abrir de forma segura con Pillow (soporta rutas unicode, espacios y temp files)
+            pil_img = Image.open(ruta_imagen)
+            img_np = np.array(pil_img.convert('RGB'))
+            gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
+            h, w = gray.shape
+            
+            filename = os.path.basename(ruta_imagen).lower()
+            
+            # Pista 1: Nombre del archivo
+            if "4-arqueros" in filename or "hoja" in filename or "planillas" in filename or "cuadrantes" in filename:
+                es_hoja_completa = True
+            elif "1a-" in filename or "individual" in filename or "crop_" in filename:
+                es_hoja_completa = False
+            else:
+                # Pista 2: Detección visual de líneas horizontales de tablas en la mitad superior e inferior
+                _, thresh = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY_INV)
+                
+                kernel_h = cv2.getStructuringElement(cv2.MORPH_RECT, (max(10, w // 20), 1))
+                lines_h = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel_h)
+                
+                top_lines_density = np.mean(lines_h[0:int(h * 0.4), :])
+                bot_lines_density = np.mean(lines_h[int(h * 0.5):int(h * 0.9), :])
+                
+                has_top_tables = top_lines_density > 0.05
+                has_bot_tables = bot_lines_density > 0.05
+                
+                if has_top_tables and has_bot_tables:
+                    es_hoja_completa = True
+                elif w > 500 and h > 500 and (0.45 < (w / h) < 1.85):
+                    # Por defecto para cualquier captura de hoja completa
+                    es_hoja_completa = True
+                else:
+                    es_hoja_completa = False
+
+            cuadrantes_coords = {
+                "1A": (0, 0, w // 2, h // 2),
+                "1B": (w // 2, 0, w, h // 2),
+                "1C": (0, h // 2, w // 2, h),
+                "1D": (w // 2, h // 2, w, h)
+            }
+            
+            if es_hoja_completa:
+                _, thresh = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY_INV)
+                activos = []
+                for name, (x1, y1, x2, y2) in cuadrantes_coords.items():
+                    crop = thresh[y1:y2, x1:x2]
+                    margin_y = int((y2 - y1) * 0.15)
+                    margin_x = int((x2 - x1) * 0.15)
+                    inner_crop = crop[margin_y:-margin_y, margin_x:-margin_x]
+                    
+                    mean_density = np.mean(inner_crop)
+                    if mean_density > 0.8:
+                        activos.append(name)
+                        
+                if not activos:
+                    activos = ["1A", "1B", "1C", "1D"]
+                    
+                return "4_arqueros", activos
+            else:
+                return "1_arquero", ["Individual"]
+        except Exception as e:
+            print(f"⚠️ Error en análisis OpenCV de layout: {e}")
+            return "4_arqueros", ["1A", "1B", "1C", "1D"]
+
+    @staticmethod
     def segmentar_planilla_4_arqueros(ruta_imagen, carpeta_salida):
         if not os.path.exists(carpeta_salida):
             os.makedirs(carpeta_salida)
@@ -452,6 +564,60 @@ def obtener_valores_validos_categoria(categoria_str):
     else:
         # Compuesto y Recurvo Estándar (RM/RW, CM/CW)
         return [10, 9, 8, 7, 6, 0]
+
+
+def triangular_y_corregir_serie(shots, sum_declared, tot_accum_declared, prev_tot_accum_declared, category):
+    valores_validos = obtener_valores_validos_categoria(category)
+    valores = []
+    for t in shots:
+        t_clean = str(t).strip().upper()
+        if t_clean == "M" or t_clean == "" or t_clean == "0":
+            valores.append(0)
+        else:
+            try:
+                valores.append(int(t_clean))
+            except ValueError:
+                valores.append(0)
+                
+    suma_real_tiros = sum(valores)
+    
+    delta_tot = None
+    if tot_accum_declared > 0 and tot_accum_declared >= prev_tot_accum_declared:
+        delta_tot = tot_accum_declared - prev_tot_accum_declared
+        
+    final_sum = sum_declared
+    corrected_shots = shots
+    notes = []
+    
+    # Triangulación Punta 1, 2, 3:
+    # Caso A: La suma escrita y el incremento del total acumulado en papel coinciden entre sí
+    if delta_tot is not None and sum_declared == delta_tot and sum_declared > 0:
+        target_sum = sum_declared
+        if suma_real_tiros != target_sum:
+            # 100% Error de lectura OCR en las flechas
+            corrected_shots, corrected = auto_corregir_serie(shots, target_sum, category)
+            if corrected:
+                notes.append(f"Auto-corregida lectura de flechas por coincidencia tridimensional ({sum_declared})")
+        return corrected_shots, final_sum, notes
+
+    # Caso B: Las flechas leídas coinciden con el incremento del total acumulado, pero difieren de la suma escrita
+    if delta_tot is not None and suma_real_tiros == delta_tot and suma_real_tiros != sum_declared:
+        final_sum = suma_real_tiros
+        notes.append(f"Corregida suma parcial declarada por el arquero ({sum_declared} -> {suma_real_tiros})")
+        return shots, final_sum, notes
+
+    # Caso C: Las flechas coinciden con la suma escrita
+    if suma_real_tiros == sum_declared:
+        if delta_tot is not None and delta_tot != sum_declared:
+            notes.append(f"Inconsistencia en total acumulado del papel en esta serie")
+        return shots, final_sum, notes
+
+    # Caso D: Despeje estándar por suma declarada si las flechas no coinciden
+    if sum_declared > 0 and suma_real_tiros != sum_declared:
+        corrected_shots, corrected = auto_corregir_serie(shots, sum_declared, category)
+        return corrected_shots, sum_declared, notes
+
+    return shots, final_sum, notes
 
 def auto_corregir_serie(tiros, sum_declared, category):
     valores_validos = obtener_valores_validos_categoria(category)
@@ -613,17 +779,29 @@ def procesar_archivo_upload(file_input, mode_input, state):
     else:
         imagen_final = file_path
         gr_msg = f"📸 Imagen '{os.path.basename(file_path)}' cargada con éxito. Base de datos de guardado: {csv_filename}"
-    usar_segmentacion = (mode_input == "Hoja Completa (4 Arqueros)")
-    if mode_input == "Detección Automática" and not filename.endswith(".pdf"):
-        img_temp = Image.open(imagen_final)
-        w, h = img_temp.size
-        if w > 1000 and h > 1000 and (0.7 < (w / h) < 1.4):
-            usar_segmentacion = True
-    if usar_segmentacion:
+    # Detección inteligente de layout y ocupación con OpenCV
+    tipo_layout = "1_arquero"
+    cuadrantes_activos = ["Individual"]
+    
+    if mode_input == "Hoja Completa (4 Arqueros)":
+        tipo_layout = "4_arqueros"
+        cuadrantes_activos = ["1A", "1B", "1C", "1D"]
+    elif mode_input == "Planilla Individual (1 Arquero)":
+        tipo_layout = "1_arquero"
+        cuadrantes_activos = ["Individual"]
+    else:  # Detección Automática
+        tipo_layout, cuadrantes_activos = ArcherySegmenter.analizar_layout_y_ocupacion(imagen_final)
+        
+    if tipo_layout == "4_arqueros":
         try:
             crops = ArcherySegmenter.segmentar_planilla_4_arqueros(imagen_final, temp_dir)
             session_crops = crops
-            gr_msg += " ✂️ Planilla grupal segmentada automáticamente en 4 cuadrantes."
+            inactivos = [c for c in ["1A", "1B", "1C", "1D"] if c not in cuadrantes_activos]
+            msg_ocupacion = f" ✂️ Detección Automática: Planilla grupal de 4 cuadrantes. Activos con datos: {', '.join(cuadrantes_activos)}."
+            if inactivos:
+                msg_ocupacion += f" (Cuadrantes vacíos desmarcados: {', '.join(inactivos)})."
+                
+            gr_msg += msg_ocupacion
             return (
                 gr_msg,
                 imagen_final,
@@ -631,11 +809,14 @@ def procesar_archivo_upload(file_input, mode_input, state):
                 gr.update(value=crops["1B"], visible=True),
                 gr.update(value=crops["1C"], visible=True),
                 gr.update(value=crops["1D"], visible=True),
-                gr.update(choices=["1A", "1B", "1C", "1D"], value=["1A", "1B", "1C", "1D"], visible=True),
+                gr.update(choices=["1A", "1B", "1C", "1D"], value=cuadrantes_activos, visible=True),
                 state
             )
         except Exception as e:
             return f"❌ Error en segmentación visual: {e}", imagen_final, gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(choices=["Individual"], value=["Individual"], visible=False), state
+            
+    # Si es planilla individual
+    gr_msg += " 📄 Detección Automática: Planilla individual detectada."
     return (
         gr_msg,
         imagen_final,
@@ -649,9 +830,11 @@ def procesar_archivo_upload(file_input, mode_input, state):
 
 # Lista ordenada de modelos para OCR (Prueba de resistencia masiva adaptativa)
 FALLBACK_MODELS = [
-    "minimaxai/minimax-m3",         # El más estable y confiable de la suite
-    "meta/muse-glimmer-30b",       # Modelo secundario de razonamiento profundo
-    "nvidia/nemotron-ocr-v2"        # Extractor especializado de tablas de NVIDIA
+    "meta/llama-3.2-11b-vision-instruct",           # 1. Ultra-rápido (11B), baja latencia, evita timeouts 504
+    "minimaxai/minimax-m3",                          # 2. Modelo MoE multimodal de alta precisión para tablas
+    "moonshotai/kimi-k3",                            # 3. Modelo MoE multimodal con razonamiento profundo
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", # 4. Modelo omni-modal de razonamiento visual
+    "nvidia/nemotron-ocr-v2"                         # 5. Extractor especializado de tablas
 ]
 
 def ejecutar_ocr_ia_multiple(file_input, selected_targets, model_name_ignored, tipo_planilla, modalidad_val, state):
@@ -668,7 +851,7 @@ def ejecutar_ocr_ia_multiple(file_input, selected_targets, model_name_ignored, t
     api_key = os.environ.get("NVIDIA_API_KEY", "").strip()
     if not api_key:
         err_msg = "❌ Error Crítico: No se encontró la clave NVIDIA_API_KEY configurada en el archivo .env local del servidor. El procesamiento real por OCR no se puede ejecutar."
-        empty_df = pd.DataFrame([[i, "", "", "", 0, 0, 0, 0] for i in range(1, 11)], columns=["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Total Acumulado", "10s", "9s"])
+        empty_df = pd.DataFrame([[i, "", "", "", 0, 0, 0, 0, 0] for i in range(1, 11)], columns=["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Tot. Escrito", "Tot. Calculado", "10s", "9s"])
         status_alert_err = "<div style='background-color: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px; border: 1px solid #f5c6cb; margin-top: 10px; font-weight: bold;'>❌ [ERROR DE CONFIGURACIÓN]: NVIDIA_API_KEY ausente. Por favor, edita tu archivo .env local y colócala allí para activar el OCR.</div>"
         yield err_msg, "", "", "", "1", 0, empty_df, 0, err_msg, status_alert_err, gr.update(visible=False), state
         return
@@ -747,44 +930,66 @@ def ejecutar_ocr_ia_multiple(file_input, selected_targets, model_name_ignored, t
             
             # Calcular la suma parcial acumulada fila por fila (Total Acumulado)
             cumulative_sum = 0
+            prev_tot_acc_dec = 0
             rows_list = []
-            for r in data.get("rows", []):
-                series_num = int(r.get("series_num"))
+            for idx, r in enumerate(data.get("rows", [])):
+                try:
+                    series_num = int(r.get("series_num", idx + 1))
+                except (ValueError, TypeError):
+                    series_num = idx + 1
+                    
                 shots = [str(r.get("shot_1", "")).strip().upper(), str(r.get("shot_2", "")).strip().upper(), str(r.get("shot_3", "")).strip().upper()]
-                sum_dec = int(r.get("sum_declared", 0))
-                corrected_shots, corrected = auto_corregir_serie(shots, sum_dec, category)
-                cumulative_sum += sum_dec
+                try:
+                    sum_dec = int(r.get("sum_declared", 0))
+                except (ValueError, TypeError):
+                    sum_dec = 0
+                    
+                try:
+                    tot_acc_dec = int(r.get("total_accumulated_declared", 0))
+                except (ValueError, TypeError):
+                    tot_acc_dec = 0
+                    
+                corrected_shots, final_sum_dec, notes = triangular_y_corregir_serie(
+                    shots, sum_dec, tot_acc_dec, prev_tot_acc_dec, category
+                )
+                
+                if tot_acc_dec > 0:
+                    prev_tot_acc_dec = tot_acc_dec
+                else:
+                    prev_tot_acc_dec = prev_tot_acc_dec + final_sum_dec
+                    
+                cumulative_sum += final_sum_dec
                 
                 # Contar dinámicamente según la modalidad
                 if modalidad_val == "Aire Libre (Outdoor)":
                     count_x = sum(1 for s in corrected_shots if s == "X")
                     count_10 = sum(1 for s in corrected_shots if s == "10")
-                    col6_val = count_x
-                    col7_val = count_10
+                    col7_val = count_x
+                    col8_val = count_10
                 else:  # Sala (Indoor 18m)
                     count_10 = sum(1 for s in corrected_shots if s == "10" or s == "X")
                     count_9 = sum(1 for s in corrected_shots if s == "9")
-                    col6_val = count_10
-                    col7_val = count_9
+                    col7_val = count_10
+                    col8_val = count_9
                     
                 rows_list.append([
                     series_num,
                     corrected_shots[0],
                     corrected_shots[1],
                     corrected_shots[2],
-                    sum_dec,
+                    final_sum_dec,
+                    tot_acc_dec,
                     cumulative_sum,
-                    col6_val,
-                    col7_val
+                    col7_val,
+                    col8_val
                 ])
                 
             if not rows_list:
-                rows_list = [[i, "", "", "", 0, 0, 0, 0] for i in range(1, 11)]
+                rows_list = [[i, "", "", "", 0, 0, 0, 0, 0] for i in range(1, 11)]
                 
-            # Determinar títulos de columnas según la modalidad (Indoor 10s/9s vs Outdoor Xs/10s)
-            cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Total Acumulado", "10s", "9s"]
+            cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Tot. Escrito", "Tot. Calculado", "10s", "9s"]
             if modalidad_val == "Aire Libre (Outdoor)":
-                cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Total Acumulado", "Xs", "10s"]
+                cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Tot. Escrito", "Tot. Calculado", "Xs", "10s"]
                 
             df_target = pd.DataFrame(rows_list, columns=cols)
             
@@ -886,10 +1091,10 @@ def cambiar_arquero_activo(target_nuevo, state, nombre_actual, target_actual, ca
     total_dec_nuevo = data_nueva.get("total_points_declared", 0)
     df_nuevo = data_nueva.get("df_editor")
     if df_nuevo is None:
-        rows_list = [[i, "", "", "", 0, 0, 0, 0] for i in range(1, 11)]
-        cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Total Acumulado", "10s", "9s"]
+        rows_list = [[i, "", "", "", 0, 0, 0, 0, 0] for i in range(1, 11)]
+        cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Tot. Escrito", "Tot. Calculado", "10s", "9s"]
         if "X" in str(cat_nueva).upper():
-            cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Total Acumulado", "Xs", "10s"]
+            cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Tot. Escrito", "Tot. Calculado", "Xs", "10s"]
         df_nuevo = pd.DataFrame(rows_list, columns=cols)
     total_calc, qa_report, status_alert = realizar_validacion_aritmetica(df_nuevo, total_dec_nuevo, cat_nueva)
     return (
@@ -927,7 +1132,7 @@ def reintentar_fallidos_ia(file_input, model_name_ignored, tipo_planilla, modali
     api_key = os.environ.get("NVIDIA_API_KEY", "").strip()
     if not api_key:
         err_msg = "❌ Error Crítico: No se encontró la clave NVIDIA_API_KEY configurada en el archivo .env local."
-        empty_df = pd.DataFrame([[i, "", "", "", 0, 0, 0, 0] for i in range(1, 11)], columns=["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Total Acumulado", "10s", "9s"])
+        empty_df = pd.DataFrame([[i, "", "", "", 0, 0, 0, 0, 0] for i in range(1, 11)], columns=["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Tot. Escrito", "Tot. Calculado", "10s", "9s"])
         status_alert_err = "<div style='background-color: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px; border: 1px solid #f5c6cb; margin-top: 10px; font-weight: bold;'>❌ [ERROR DE CONFIGURACIÓN]: NVIDIA_API_KEY ausente.</div>"
         yield err_msg, "", "", "", "1", 0, empty_df, 0, err_msg, status_alert_err, gr.update(visible=False), state
         return
@@ -1001,43 +1206,66 @@ def reintentar_fallidos_ia(file_input, model_name_ignored, tipo_planilla, modali
             
             # Calcular suma parcial acumulada fila por fila
             cumulative_sum = 0
+            prev_tot_acc_dec = 0
             rows_list = []
-            for r in data.get("rows", []):
-                series_num = int(r.get("series_num"))
+            for idx, r in enumerate(data.get("rows", [])):
+                try:
+                    series_num = int(r.get("series_num", idx + 1))
+                except (ValueError, TypeError):
+                    series_num = idx + 1
+                    
                 shots = [str(r.get("shot_1", "")).strip().upper(), str(r.get("shot_2", "")).strip().upper(), str(r.get("shot_3", "")).strip().upper()]
-                sum_dec = int(r.get("sum_declared", 0))
-                corrected_shots, corrected = auto_corregir_serie(shots, sum_dec, category)
-                cumulative_sum += sum_dec
+                try:
+                    sum_dec = int(r.get("sum_declared", 0))
+                except (ValueError, TypeError):
+                    sum_dec = 0
+                    
+                try:
+                    tot_acc_dec = int(r.get("total_accumulated_declared", 0))
+                except (ValueError, TypeError):
+                    tot_acc_dec = 0
+                    
+                corrected_shots, final_sum_dec, notes = triangular_y_corregir_serie(
+                    shots, sum_dec, tot_acc_dec, prev_tot_acc_dec, category
+                )
+                
+                if tot_acc_dec > 0:
+                    prev_tot_acc_dec = tot_acc_dec
+                else:
+                    prev_tot_acc_dec = prev_tot_acc_dec + final_sum_dec
+                    
+                cumulative_sum += final_sum_dec
                 
                 # Contar dinámicamente según la modalidad
                 if modalidad_val == "Aire Libre (Outdoor)":
                     count_x = sum(1 for s in corrected_shots if s == "X")
                     count_10 = sum(1 for s in corrected_shots if s == "10")
-                    col6_val = count_x
-                    col7_val = count_10
+                    col7_val = count_x
+                    col8_val = count_10
                 else:  # Sala (Indoor 18m)
                     count_10 = sum(1 for s in corrected_shots if s == "10" or s == "X")
                     count_9 = sum(1 for s in corrected_shots if s == "9")
-                    col6_val = count_10
-                    col7_val = count_9
+                    col7_val = count_10
+                    col8_val = count_9
                     
                 rows_list.append([
                     series_num,
                     corrected_shots[0],
                     corrected_shots[1],
                     corrected_shots[2],
-                    sum_dec,
+                    final_sum_dec,
+                    tot_acc_dec,
                     cumulative_sum,
-                    col6_val,
-                    col7_val
+                    col7_val,
+                    col8_val
                 ])
                 
             if not rows_list:
-                rows_list = [[i, "", "", "", 0, 0, 0, 0] for i in range(1, 11)]
+                rows_list = [[i, "", "", "", 0, 0, 0, 0, 0] for i in range(1, 11)]
                 
-            cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Total Acumulado", "10s", "9s"]
+            cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Tot. Escrito", "Tot. Calculado", "10s", "9s"]
             if modalidad_val == "Aire Libre (Outdoor)":
-                cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Total Acumulado", "Xs", "10s"]
+                cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Tot. Escrito", "Tot. Calculado", "Xs", "10s"]
                 
             df_target = pd.DataFrame(rows_list, columns=cols)
             
@@ -1133,7 +1361,7 @@ def reintentar_especifico_ia(file_input, target_to_retry, model_name_ignored, ti
     api_key = os.environ.get("NVIDIA_API_KEY", "").strip()
     if not api_key:
         err_msg = "❌ Error Crítico: No se encontró la clave NVIDIA_API_KEY configurada en el archivo .env local."
-        empty_df = pd.DataFrame([[i, "", "", "", 0, 0, 0, 0] for i in range(1, 11)], columns=["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Total Acumulado", "10s", "9s"])
+        empty_df = pd.DataFrame([[i, "", "", "", 0, 0, 0, 0, 0] for i in range(1, 11)], columns=["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Tot. Escrito", "Tot. Calculado", "10s", "9s"])
         status_alert_err = "<div style='background-color: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px; border: 1px solid #f5c6cb; margin-top: 10px; font-weight: bold;'>❌ [ERROR DE CONFIGURACIÓN]: NVIDIA_API_KEY ausente.</div>"
         yield err_msg, "", "", "", "1", 0, empty_df, 0, err_msg, status_alert_err, gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), state
         return
@@ -1186,44 +1414,67 @@ def reintentar_especifico_ia(file_input, target_to_retry, model_name_ignored, ti
         data = successful_data
 
     category = data.get("category", "")
-    rows_list = []
     cumulative_sum = 0
-    for r in data.get("rows", []):
-        series_num = int(r.get("series_num"))
+    prev_tot_acc_dec = 0
+    rows_list = []
+    for idx, r in enumerate(data.get("rows", [])):
+        try:
+            series_num = int(r.get("series_num", idx + 1))
+        except (ValueError, TypeError):
+            series_num = idx + 1
+            
         shots = [str(r.get("shot_1", "")).strip().upper(), str(r.get("shot_2", "")).strip().upper(), str(r.get("shot_3", "")).strip().upper()]
-        sum_dec = int(r.get("sum_declared", 0))
-        corrected_shots, corrected = auto_corregir_serie(shots, sum_dec, category)
-        cumulative_sum += sum_dec
+        try:
+            sum_dec = int(r.get("sum_declared", 0))
+        except (ValueError, TypeError):
+            sum_dec = 0
+            
+        try:
+            tot_acc_dec = int(r.get("total_accumulated_declared", 0))
+        except (ValueError, TypeError):
+            tot_acc_dec = 0
+            
+        corrected_shots, final_sum_dec, notes = triangular_y_corregir_serie(
+            shots, sum_dec, tot_acc_dec, prev_tot_acc_dec, category
+        )
+        
+        if tot_acc_dec > 0:
+            prev_tot_acc_dec = tot_acc_dec
+        else:
+            prev_tot_acc_dec = prev_tot_acc_dec + final_sum_dec
+            
+        cumulative_sum += final_sum_dec
         
         # Contar dinámicamente según la modalidad
         if modalidad_val == "Aire Libre (Outdoor)":
             count_x = sum(1 for s in corrected_shots if s == "X")
             count_10 = sum(1 for s in corrected_shots if s == "10")
-            col6_val = count_x
-            col7_val = count_10
+            col7_val = count_x
+            col8_val = count_10
         else:  # Sala (Indoor 18m)
             count_10 = sum(1 for s in corrected_shots if s == "10" or s == "X")
             count_9 = sum(1 for s in corrected_shots if s == "9")
-            col6_val = count_10
-            col7_val = count_9
+            col7_val = count_10
+            col8_val = count_9
             
         rows_list.append([
             series_num,
             corrected_shots[0],
             corrected_shots[1],
             corrected_shots[2],
-            sum_dec,
+            final_sum_dec,
+            tot_acc_dec,
             cumulative_sum,
-            col6_val,
-            col7_val
+            col7_val,
+            col8_val
         ])
         
     if not rows_list:
-        rows_list = [[i, "", "", "", 0, 0, 0, 0] for i in range(1, 11)]
+        rows_list = [[i, "", "", "", 0, 0, 0, 0, 0] for i in range(1, 11)]
         
-    cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Total Acumulado", "10s", "9s"]
+    cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Tot. Escrito", "Tot. Calculado", "10s", "9s"]
     if modalidad_val == "Aire Libre (Outdoor)":
-        cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Total Acumulado", "Xs", "10s"]
+        cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Tot. Escrito", "Tot. Calculado", "Xs", "10s"]
         
     df_target = pd.DataFrame(rows_list, columns=cols)
     
@@ -1320,13 +1571,28 @@ def realizar_validacion_aritmetica(df, total_declarado, category=""):
         except (ValueError, TypeError, IndexError):
             suma_dec = 0
             
+        try:
+            tot_escrito = int(row.iloc[5])
+        except (ValueError, TypeError, IndexError):
+            tot_escrito = 0
+
+        try:
+            tot_calc = int(row.iloc[6])
+        except (ValueError, TypeError, IndexError):
+            tot_calc = 0
+            
         if suma_serie != suma_dec:
             sugerencias = sugerir_correccion_tiros(tiros_str, suma_dec, category)
             s_text = ""
             if sugerencias:
-                s_text = "<br>&nbsp;&nbsp;&nbsp;&nbsp;💡 <b>Sugerencia de Autocorrección:</b> " + " o ".join([f"<u>{s}</u>" for s in sugerencias])
+                s_text = "<br>&nbsp;&nbsp;&nbsp;&nbsp;💡 <b>Sugerencia:</b> " + " o ".join([f"<u>{s}</u>" for s in sugerencias])
             discrepancias_series.append(
-                f"❌ <b>Serie #{num_serie}:</b> Suma aritmética ({suma_serie}) != Suma declarada ({suma_dec}) [Tiros: {row.iloc[1]}, {row.iloc[2]}, {row.iloc[3]}]" + s_text
+                f"❌ <b>Serie #{num_serie}:</b> Suma de tiros ({suma_serie}) != Suma declarada ({suma_dec}) [Tiros: {row.iloc[1]}, {row.iloc[2]}, {row.iloc[3]}]" + s_text
+            )
+            
+        if tot_escrito > 0 and tot_escrito != tot_calc:
+            discrepancias_series.append(
+                f"⚠️ <b>Serie #{num_serie}:</b> Tot. Escrito en papel ({tot_escrito}) != Tot. Calculado acumulado ({tot_calc})"
             )
             
     try:
@@ -1337,10 +1603,10 @@ def realizar_validacion_aritmetica(df, total_declarado, category=""):
     if total_calculado != tot_dec:
         discrepancias_series.append(f"❌ <b>Total General:</b> La suma real calculada ({total_calculado}) difiere del total general escrito ({tot_dec}).")
     if total_calculado == tot_dec and len(discrepancias_series) == 0:
-        status_alert = "<div style='background-color: #d4edda; color: #155724; padding: 15px; border-radius: 5px; border: 1px solid #c3e6cb; margin-top: 10px; font-weight: bold;'>💚 [CONCORDANCIA ABSOLUTA]: Todos los tiros individuales y sumas parciales coinciden perfectamente de forma lógica.</div>"
-        reporte_md = "🟢 Todos los controles aritméticos pasaron satisfactoriamente."
+        status_alert = "<div style='background-color: #d4edda; color: #155724; padding: 15px; border-radius: 5px; border: 1px solid #c3e6cb; margin-top: 10px; font-weight: bold;'>💚 [CONCORDANCIA ABSOLUTA]: Todos los tiros individuales, sumas parciales y acumulados coinciden de forma lógica.</div>"
+        reporte_md = "🟢 Todos los controles de triangulación pasaron satisfactoriamente."
     else:
-        status_alert = "<div style='background-color: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px; border: 1px solid #f5c6cb; margin-top: 10px; font-weight: bold;'>⚠️ [DISCREPANCIAS DETECTADAS]: El sistema detectó sumas inconsistentes. Sigue las sugerencias para corregir.</div>"
+        status_alert = "<div style='background-color: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px; border: 1px solid #f5c6cb; margin-top: 10px; font-weight: bold;'>⚠️ [DISCREPANCIAS DETECTADAS]: El sistema detectó inconsistencias. Sigue las sugerencias para corregir.</div>"
         reporte_md = "<br>".join(discrepancias_series)
     return total_calculado, reporte_md, status_alert
 
@@ -1471,16 +1737,16 @@ def guardar_todos_los_datos_state(state):
         return f"❌ Error en guardado masivo: {e}"
 
 # --- DISEÑO DE LA INTERFAZ GRADIO ---
-with gr.Blocks(title="🎯 Parser de Tiro con Arco - Gradio App v27") as demo:
+with gr.Blocks(title="🎯 Parser de Tiro con Arco - Gradio App v32") as demo:
     session_state = gr.State(value={"transcribed_data": {}, "active_target": None, "csv_filename": "torneo_indoor_san_francisco_detallado.csv"})
-    gr.Markdown("# 🎯 Parser de Tiro con Arco - Transcripción e IA Adaptativa (v27 Robustez & Recuperación)")
+    gr.Markdown("# 🎯 Parser de Tiro con Arco - Transcripción e IA Adaptativa (v32 Robustez & Recuperación)")
     gr.Markdown("Sube una planilla de clasificación oficial (PDF o Imagen). El sistema segmentará cuadrantes automáticamente y ejecutará el OCR real en paralelo (ThreadPool) con NVIDIA NIM.")
 
     with gr.Row():
         with gr.Column(scale=1):
             gr.Markdown("### 🔑 Configuración del Sistema")
             gr.Markdown("ℹ️ <i>NVIDIA_API_KEY se lee automáticamente de forma segura en el backend desde tu archivo .env local. No se expone en la interfaz para prevenir vulnerabilidades de inspección.</i>")
-            model_select = gr.Textbox(label="⚙️ Modelo OCR de Resistencia (Estable)", value="minimaxai/minimax-m3 (Modelos fallidos comentados)", interactive=False, info="Se han desactivado temporalmente los modelos inestables o dados de baja. El procesamiento de los arqueros se realizará exclusivamente con minimaxai/minimax-m3 para probar su resistencia en lote.")
+            model_select = gr.Textbox(label="⚙️ Cadena de Fallback Multimodales (NVIDIA NIM v29)", value="1. llama-3.2-11b-vision ➔ 2. minimax-m3 ➔ 3. kimi-k3 ➔ 4. nemotron-3-nano-omni ➔ 5. nemotron-ocr-v2", interactive=False, info="El sistema procesa los arqueros en paralelo. Si un modelo alcanza el límite de tasa (429) o timeout, escala automáticamente por los nuevos modelos multimodales agregados a la biblioteca.")
             planilla_type = gr.Dropdown(label="Tipo de Planilla", choices=["clasificacion", "eliminatoria"], value="clasificacion")
             modalidad_type = gr.Dropdown(label="Modalidad de Competición", choices=["Sala (Indoor 18m)", "Aire Libre (Outdoor)"], value="Sala (Indoor 18m)")
             mode_select = gr.Dropdown(label="Segmentación Visual", choices=["Detección Automática", "Planilla Individual (1 Arquero)", "Hoja Completa (4 Arqueros)"], value="Detección Automática")
@@ -1532,12 +1798,12 @@ with gr.Blocks(title="🎯 Parser de Tiro con Arco - Gradio App v27") as demo:
         with gr.Column(scale=2):
             gr.Markdown("### ✍️ Consola de Edición de Tiros (Tipo Excel)")
             df_editor = gr.Dataframe(
-                headers=["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Total Acumulado", "10s", "9s"],
-                datatype=["number", "str", "str", "str", "number", "number", "number", "number"],
+                headers=["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Tot. Escrito", "Tot. Calculado", "10s", "9s"],
+                datatype=["number", "str", "str", "str", "number", "number", "number", "number", "number"],
                 row_count=10,
-                column_count=(8, "fixed"),
+                column_count=(9, "fixed"),
                 interactive=True,
-                label="Grilla de Puntuaciones (10 Series)"
+                label="Grilla de Puntuaciones (10 Series - Triangulación a 3 Puntas)"
             )
 
     gr.Markdown("---")
@@ -1611,7 +1877,7 @@ with gr.Blocks(title="🎯 Parser de Tiro con Arco - Gradio App v27") as demo:
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("🚀 Iniciando Interfaz Local de Procesamiento de Arquería (Gradio Standalone - v27)")
+    print("🚀 Iniciando Interfaz Local de Procesamiento de Arquería (Gradio Standalone - v32)")
     print("🌍 Abre tu navegador en: http://localhost:7860")
     print("=" * 60)
     demo.launch(server_name="0.0.0.0", server_port=7860, share=False, theme=gr.themes.Default())

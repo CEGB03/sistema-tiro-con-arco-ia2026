@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🎯 Interfaz Web de Cómputos para Tiro con Arco (Gradio Standalone Single-File - v15)
+🎯 Interfaz Web de Cómputos para Tiro con Arco (Gradio Standalone Single-File - v29)
 Lanzamiento eficiente directo en puerto 7860.
 Soporta:
 1. Selección múltiple de arqueros para transcripción simultánea en paralelo.
@@ -453,6 +453,60 @@ def obtener_valores_validos_categoria(categoria_str):
         # Compuesto y Recurvo Estándar (RM/RW, CM/CW)
         return [10, 9, 8, 7, 6, 0]
 
+
+def triangular_y_corregir_serie(shots, sum_declared, tot_accum_declared, prev_tot_accum_declared, category):
+    valores_validos = obtener_valores_validos_categoria(category)
+    valores = []
+    for t in shots:
+        t_clean = str(t).strip().upper()
+        if t_clean == "M" or t_clean == "" or t_clean == "0":
+            valores.append(0)
+        else:
+            try:
+                valores.append(int(t_clean))
+            except ValueError:
+                valores.append(0)
+                
+    suma_real_tiros = sum(valores)
+    
+    delta_tot = None
+    if tot_accum_declared > 0 and tot_accum_declared >= prev_tot_accum_declared:
+        delta_tot = tot_accum_declared - prev_tot_accum_declared
+        
+    final_sum = sum_declared
+    corrected_shots = shots
+    notes = []
+    
+    # Triangulación Punta 1, 2, 3:
+    # Caso A: La suma escrita y el incremento del total acumulado en papel coinciden entre sí
+    if delta_tot is not None and sum_declared == delta_tot and sum_declared > 0:
+        target_sum = sum_declared
+        if suma_real_tiros != target_sum:
+            # 100% Error de lectura OCR en las flechas
+            corrected_shots, corrected = auto_corregir_serie(shots, target_sum, category)
+            if corrected:
+                notes.append(f"Auto-corregida lectura de flechas por coincidencia tridimensional ({sum_declared})")
+        return corrected_shots, final_sum, notes
+
+    # Caso B: Las flechas leídas coinciden con el incremento del total acumulado, pero difieren de la suma escrita
+    if delta_tot is not None and suma_real_tiros == delta_tot and suma_real_tiros != sum_declared:
+        final_sum = suma_real_tiros
+        notes.append(f"Corregida suma parcial declarada por el arquero ({sum_declared} -> {suma_real_tiros})")
+        return shots, final_sum, notes
+
+    # Caso C: Las flechas coinciden con la suma escrita
+    if suma_real_tiros == sum_declared:
+        if delta_tot is not None and delta_tot != sum_declared:
+            notes.append(f"Inconsistencia en total acumulado del papel en esta serie")
+        return shots, final_sum, notes
+
+    # Caso D: Despeje estándar por suma declarada si las flechas no coinciden
+    if sum_declared > 0 and suma_real_tiros != sum_declared:
+        corrected_shots, corrected = auto_corregir_serie(shots, sum_declared, category)
+        return corrected_shots, sum_declared, notes
+
+    return shots, final_sum, notes
+
 def auto_corregir_serie(tiros, sum_declared, category):
     valores_validos = obtener_valores_validos_categoria(category)
     valores = []
@@ -649,9 +703,11 @@ def procesar_archivo_upload(file_input, mode_input, state):
 
 # Lista ordenada de modelos para OCR (Prueba de resistencia masiva adaptativa)
 FALLBACK_MODELS = [
-    "minimaxai/minimax-m3",         # El más estable y confiable de la suite
-    "meta/muse-glimmer-30b",       # Modelo secundario de razonamiento profundo
-    "nvidia/nemotron-ocr-v2"        # Extractor especializado de tablas de NVIDIA
+    "meta/llama-3.2-11b-vision-instruct",           # 1. Ultra-rápido (11B), baja latencia, evita timeouts 504
+    "minimaxai/minimax-m3",                          # 2. Modelo MoE multimodal de alta precisión para tablas
+    "moonshotai/kimi-k3",                            # 3. Modelo MoE multimodal con razonamiento profundo
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", # 4. Modelo omni-modal de razonamiento visual
+    "nvidia/nemotron-ocr-v2"                         # 5. Extractor especializado de tablas
 ]
 
 def ejecutar_ocr_ia_multiple(file_input, selected_targets, model_name_ignored, tipo_planilla, modalidad_val, state):
@@ -668,7 +724,7 @@ def ejecutar_ocr_ia_multiple(file_input, selected_targets, model_name_ignored, t
     api_key = os.environ.get("NVIDIA_API_KEY", "").strip()
     if not api_key:
         err_msg = "❌ Error Crítico: No se encontró la clave NVIDIA_API_KEY configurada en el archivo .env local del servidor. El procesamiento real por OCR no se puede ejecutar."
-        empty_df = pd.DataFrame([[i, "", "", "", 0, 0, 0, 0] for i in range(1, 11)], columns=["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Total Acumulado", "10s", "9s"])
+        empty_df = pd.DataFrame([[i, "", "", "", 0, 0, 0, 0, 0] for i in range(1, 11)], columns=["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Tot. Escrito", "Tot. Calculado", "10s", "9s"])
         status_alert_err = "<div style='background-color: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px; border: 1px solid #f5c6cb; margin-top: 10px; font-weight: bold;'>❌ [ERROR DE CONFIGURACIÓN]: NVIDIA_API_KEY ausente. Por favor, edita tu archivo .env local y colócala allí para activar el OCR.</div>"
         yield err_msg, "", "", "", "1", 0, empty_df, 0, err_msg, status_alert_err, gr.update(visible=False), state
         return
@@ -679,7 +735,7 @@ def ejecutar_ocr_ia_multiple(file_input, selected_targets, model_name_ignored, t
             imagen_ocr = session_crops[target]
             
         last_error = None
-        max_attempts = 2  # Intentar automáticamente hasta 2 veces el ciclo completo si hay fallas de red/saturación
+        max_attempts = 5  # Intentar automáticamente hasta 2 veces el ciclo completo si hay fallas de red/saturación
         for attempt in range(max_attempts):
             for i, model in enumerate(FALLBACK_MODELS):
                 try:
@@ -747,32 +803,66 @@ def ejecutar_ocr_ia_multiple(file_input, selected_targets, model_name_ignored, t
             
             # Calcular la suma parcial acumulada fila por fila (Total Acumulado)
             cumulative_sum = 0
+            prev_tot_acc_dec = 0
             rows_list = []
-            for r in data.get("rows", []):
-                series_num = int(r.get("series_num"))
-                shots = [str(r.get("shot_1", "")), str(r.get("shot_2", "")), str(r.get("shot_3", ""))]
-                sum_dec = int(r.get("sum_declared", 0))
-                corrected_shots, corrected = auto_corregir_serie(shots, sum_dec, category)
-                cumulative_sum += sum_dec
+            for idx, r in enumerate(data.get("rows", [])):
+                try:
+                    series_num = int(r.get("series_num", idx + 1))
+                except (ValueError, TypeError):
+                    series_num = idx + 1
+                    
+                shots = [str(r.get("shot_1", "")).strip().upper(), str(r.get("shot_2", "")).strip().upper(), str(r.get("shot_3", "")).strip().upper()]
+                try:
+                    sum_dec = int(r.get("sum_declared", 0))
+                except (ValueError, TypeError):
+                    sum_dec = 0
+                    
+                try:
+                    tot_acc_dec = int(r.get("total_accumulated_declared", 0))
+                except (ValueError, TypeError):
+                    tot_acc_dec = 0
+                    
+                corrected_shots, final_sum_dec, notes = triangular_y_corregir_serie(
+                    shots, sum_dec, tot_acc_dec, prev_tot_acc_dec, category
+                )
                 
+                if tot_acc_dec > 0:
+                    prev_tot_acc_dec = tot_acc_dec
+                else:
+                    prev_tot_acc_dec = prev_tot_acc_dec + final_sum_dec
+                    
+                cumulative_sum += final_sum_dec
+                
+                # Contar dinámicamente según la modalidad
+                if modalidad_val == "Aire Libre (Outdoor)":
+                    count_x = sum(1 for s in corrected_shots if s == "X")
+                    count_10 = sum(1 for s in corrected_shots if s == "10")
+                    col7_val = count_x
+                    col8_val = count_10
+                else:  # Sala (Indoor 18m)
+                    count_10 = sum(1 for s in corrected_shots if s == "10" or s == "X")
+                    count_9 = sum(1 for s in corrected_shots if s == "9")
+                    col7_val = count_10
+                    col8_val = count_9
+                    
                 rows_list.append([
                     series_num,
                     corrected_shots[0],
                     corrected_shots[1],
                     corrected_shots[2],
-                    sum_dec,
+                    final_sum_dec,
+                    tot_acc_dec,
                     cumulative_sum,
-                    int(r.get("tens_declared", 0)),
-                    int(r.get("nines_declared", 0))
+                    col7_val,
+                    col8_val
                 ])
                 
             if not rows_list:
-                rows_list = [[i, "", "", "", 0, 0, 0, 0] for i in range(1, 11)]
+                rows_list = [[i, "", "", "", 0, 0, 0, 0, 0] for i in range(1, 11)]
                 
-            # Determinar títulos de columnas según la modalidad (Indoor 10s/9s vs Outdoor Xs/10s)
-            cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Total Acumulado", "10s", "9s"]
+            cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Tot. Escrito", "Tot. Calculado", "10s", "9s"]
             if modalidad_val == "Aire Libre (Outdoor)":
-                cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Total Acumulado", "Xs", "10s"]
+                cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Tot. Escrito", "Tot. Calculado", "Xs", "10s"]
                 
             df_target = pd.DataFrame(rows_list, columns=cols)
             
@@ -821,6 +911,20 @@ def ejecutar_ocr_ia_multiple(file_input, selected_targets, model_name_ignored, t
                 visible=True if len(all_targets) > 0 else False
             )
             
+            failed_targets = []
+            for t_check, d_check in state["transcribed_data"].items():
+                name_check = d_check.get("archer_name", "").strip()
+                if name_check.startswith("ERROR:") or name_check == "ERROR: Fallaron todos los intentos" or not name_check:
+                    failed_targets.append(t_check)
+            
+            show_retry_box = len(failed_targets) > 0
+            individual_retry_group_update = gr.update(visible=show_retry_box)
+            target_retry_select_update = gr.update(
+                choices=failed_targets,
+                value=failed_targets[0] if failed_targets else None,
+                visible=show_retry_box
+            )
+            
             yield (
                 info_msg,
                 active_data["archer_name"],
@@ -833,6 +937,8 @@ def ejecutar_ocr_ia_multiple(file_input, selected_targets, model_name_ignored, t
                 qa_report,
                 status_alert,
                 dropdown_update,
+                individual_retry_group_update,
+                target_retry_select_update,
                 state
             )
 
@@ -858,10 +964,10 @@ def cambiar_arquero_activo(target_nuevo, state, nombre_actual, target_actual, ca
     total_dec_nuevo = data_nueva.get("total_points_declared", 0)
     df_nuevo = data_nueva.get("df_editor")
     if df_nuevo is None:
-        rows_list = [[i, "", "", "", 0, 0, 0, 0] for i in range(1, 11)]
-        cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Total Acumulado", "10s", "9s"]
+        rows_list = [[i, "", "", "", 0, 0, 0, 0, 0] for i in range(1, 11)]
+        cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Tot. Escrito", "Tot. Calculado", "10s", "9s"]
         if "X" in str(cat_nueva).upper():
-            cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Total Acumulado", "Xs", "10s"]
+            cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Tot. Escrito", "Tot. Calculado", "Xs", "10s"]
         df_nuevo = pd.DataFrame(rows_list, columns=cols)
     total_calc, qa_report, status_alert = realizar_validacion_aritmetica(df_nuevo, total_dec_nuevo, cat_nueva)
     return (
@@ -899,7 +1005,7 @@ def reintentar_fallidos_ia(file_input, model_name_ignored, tipo_planilla, modali
     api_key = os.environ.get("NVIDIA_API_KEY", "").strip()
     if not api_key:
         err_msg = "❌ Error Crítico: No se encontró la clave NVIDIA_API_KEY configurada en el archivo .env local."
-        empty_df = pd.DataFrame([[i, "", "", "", 0, 0, 0, 0] for i in range(1, 11)], columns=["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Total Acumulado", "10s", "9s"])
+        empty_df = pd.DataFrame([[i, "", "", "", 0, 0, 0, 0, 0] for i in range(1, 11)], columns=["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Tot. Escrito", "Tot. Calculado", "10s", "9s"])
         status_alert_err = "<div style='background-color: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px; border: 1px solid #f5c6cb; margin-top: 10px; font-weight: bold;'>❌ [ERROR DE CONFIGURACIÓN]: NVIDIA_API_KEY ausente.</div>"
         yield err_msg, "", "", "", "1", 0, empty_df, 0, err_msg, status_alert_err, gr.update(visible=False), state
         return
@@ -910,7 +1016,7 @@ def reintentar_fallidos_ia(file_input, model_name_ignored, tipo_planilla, modali
             imagen_ocr = session_crops[target]
             
         last_error = None
-        max_attempts = 2
+        max_attempts = 5
         for attempt in range(max_attempts):
             for i, model in enumerate(FALLBACK_MODELS):
                 try:
@@ -973,30 +1079,66 @@ def reintentar_fallidos_ia(file_input, model_name_ignored, tipo_planilla, modali
             
             # Calcular suma parcial acumulada fila por fila
             cumulative_sum = 0
+            prev_tot_acc_dec = 0
             rows_list = []
-            for r in data.get("rows", []):
-                series_num = int(r.get("series_num"))
-                shots = [str(r.get("shot_1", "")), str(r.get("shot_2", "")), str(r.get("shot_3", ""))]
-                sum_dec = int(r.get("sum_declared", 0))
-                corrected_shots, corrected = auto_corregir_serie(shots, sum_dec, category)
-                cumulative_sum += sum_dec
+            for idx, r in enumerate(data.get("rows", [])):
+                try:
+                    series_num = int(r.get("series_num", idx + 1))
+                except (ValueError, TypeError):
+                    series_num = idx + 1
+                    
+                shots = [str(r.get("shot_1", "")).strip().upper(), str(r.get("shot_2", "")).strip().upper(), str(r.get("shot_3", "")).strip().upper()]
+                try:
+                    sum_dec = int(r.get("sum_declared", 0))
+                except (ValueError, TypeError):
+                    sum_dec = 0
+                    
+                try:
+                    tot_acc_dec = int(r.get("total_accumulated_declared", 0))
+                except (ValueError, TypeError):
+                    tot_acc_dec = 0
+                    
+                corrected_shots, final_sum_dec, notes = triangular_y_corregir_serie(
+                    shots, sum_dec, tot_acc_dec, prev_tot_acc_dec, category
+                )
+                
+                if tot_acc_dec > 0:
+                    prev_tot_acc_dec = tot_acc_dec
+                else:
+                    prev_tot_acc_dec = prev_tot_acc_dec + final_sum_dec
+                    
+                cumulative_sum += final_sum_dec
+                
+                # Contar dinámicamente según la modalidad
+                if modalidad_val == "Aire Libre (Outdoor)":
+                    count_x = sum(1 for s in corrected_shots if s == "X")
+                    count_10 = sum(1 for s in corrected_shots if s == "10")
+                    col7_val = count_x
+                    col8_val = count_10
+                else:  # Sala (Indoor 18m)
+                    count_10 = sum(1 for s in corrected_shots if s == "10" or s == "X")
+                    count_9 = sum(1 for s in corrected_shots if s == "9")
+                    col7_val = count_10
+                    col8_val = count_9
+                    
                 rows_list.append([
                     series_num,
                     corrected_shots[0],
                     corrected_shots[1],
                     corrected_shots[2],
-                    sum_dec,
+                    final_sum_dec,
+                    tot_acc_dec,
                     cumulative_sum,
-                    int(r.get("tens_declared", 0)),
-                    int(r.get("nines_declared", 0))
+                    col7_val,
+                    col8_val
                 ])
                 
             if not rows_list:
-                rows_list = [[i, "", "", "", 0, 0, 0, 0] for i in range(1, 11)]
+                rows_list = [[i, "", "", "", 0, 0, 0, 0, 0] for i in range(1, 11)]
                 
-            cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Total Acumulado", "10s", "9s"]
+            cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Tot. Escrito", "Tot. Calculado", "10s", "9s"]
             if modalidad_val == "Aire Libre (Outdoor)":
-                cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Total Acumulado", "Xs", "10s"]
+                cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Tot. Escrito", "Tot. Calculado", "Xs", "10s"]
                 
             df_target = pd.DataFrame(rows_list, columns=cols)
             
@@ -1046,6 +1188,20 @@ def reintentar_fallidos_ia(file_input, model_name_ignored, tipo_planilla, modali
                 visible=True if len(all_targets) > 0 else False
             )
             
+            failed_targets = []
+            for t_check, d_check in state["transcribed_data"].items():
+                name_check = d_check.get("archer_name", "").strip()
+                if name_check.startswith("ERROR:") or name_check == "ERROR: Fallaron todos los intentos" or not name_check:
+                    failed_targets.append(t_check)
+            
+            show_retry_box = len(failed_targets) > 0
+            individual_retry_group_update = gr.update(visible=show_retry_box)
+            target_retry_select_update = gr.update(
+                choices=failed_targets,
+                value=failed_targets[0] if failed_targets else None,
+                visible=show_retry_box
+            )
+            
             yield (
                 info_msg,
                 active_data["archer_name"],
@@ -1058,8 +1214,211 @@ def reintentar_fallidos_ia(file_input, model_name_ignored, tipo_planilla, modali
                 qa_report,
                 status_alert,
                 dropdown_update,
+                individual_retry_group_update,
+                target_retry_select_update,
                 state
             )
+
+
+
+def reintentar_especifico_ia(file_input, target_to_retry, model_name_ignored, tipo_planilla, modalidad_val, state):
+    global session_crops
+    if not state or "transcribed_data" not in state or not state["transcribed_data"]:
+        yield "⚠️ No hay transcripciones previas en esta sesión para reintentar.", "", "", "", "", 0, None, 0, "", "", gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), state
+        return
+        
+    if not target_to_retry:
+        yield "⚠️ Por favor selecciona un arquero específico para reintentar.", "", "", "", "", 0, None, 0, "", "", gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), state
+        return
+
+    api_key = os.environ.get("NVIDIA_API_KEY", "").strip()
+    if not api_key:
+        err_msg = "❌ Error Crítico: No se encontró la clave NVIDIA_API_KEY configurada en el archivo .env local."
+        empty_df = pd.DataFrame([[i, "", "", "", 0, 0, 0, 0, 0] for i in range(1, 11)], columns=["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Tot. Escrito", "Tot. Calculado", "10s", "9s"])
+        status_alert_err = "<div style='background-color: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px; border: 1px solid #f5c6cb; margin-top: 10px; font-weight: bold;'>❌ [ERROR DE CONFIGURACIÓN]: NVIDIA_API_KEY ausente.</div>"
+        yield err_msg, "", "", "", "1", 0, empty_df, 0, err_msg, status_alert_err, gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), state
+        return
+
+    # Realizar el OCR solo sobre el target seleccionado
+    imagen_ocr = file_input.name if file_input else None
+    if session_crops and target_to_retry in session_crops:
+        imagen_ocr = session_crops[target_to_retry]
+        
+    last_error = None
+    max_attempts = 5
+    successful_data = None
+    successful_msg = None
+    
+    for attempt in range(max_attempts):
+        for i, model in enumerate(FALLBACK_MODELS):
+            try:
+                api_rate_limiter.wait_if_needed()
+                print(f"📡 [Reintento Especifico - Target {target_to_retry}] Intentando OCR (Intento {attempt+1}/{max_attempts}, Modelo {i+1}/{len(FALLBACK_MODELS)}): {model}...")
+                ocr_client = ArcheryOCR(api_key=api_key, model_name=model)
+                data = ocr_client.analizar_planilla(imagen_ocr, tipo_planilla=tipo_planilla)
+                if data:
+                    print(f"💚 [Reintento Especifico - Target {target_to_retry}] ¡Éxito con el modelo: {model}!")
+                    successful_data = data
+                    successful_msg = f"{target_to_retry} ({model} - Recuperado)"
+                    break
+                else:
+                    raise ValueError("Respuesta vacía o JSON no estructurado.")
+            except Exception as e:
+                last_error = str(e)
+                print(f"⚠️ [Reintento Especifico - Target {target_to_retry}] Falló con el modelo {model}. Error: {last_error}")
+        if successful_data:
+            break
+        if attempt < max_attempts - 1:
+            print(f"⏱️ [Reintento Especifico - Target {target_to_retry}] Re-intentando toda la cadena en 3 segundos...")
+            time.sleep(3.0)
+            
+    if not successful_data:
+        err_msg_failed = f"Saturación total en NVIDIA NIM. Último error: {last_error}"
+        data = {
+            "archer_name": f"ERROR: Fallaron todos los intentos",
+            "target": target_to_retry,
+            "category": "",
+            "round": "1",
+            "total_points_declared": 0,
+            "rows": []
+        }
+        successful_msg = f"{target_to_retry} (❌ Falló reintento)"
+    else:
+        data = successful_data
+
+    category = data.get("category", "")
+    cumulative_sum = 0
+    prev_tot_acc_dec = 0
+    rows_list = []
+    for idx, r in enumerate(data.get("rows", [])):
+        try:
+            series_num = int(r.get("series_num", idx + 1))
+        except (ValueError, TypeError):
+            series_num = idx + 1
+            
+        shots = [str(r.get("shot_1", "")).strip().upper(), str(r.get("shot_2", "")).strip().upper(), str(r.get("shot_3", "")).strip().upper()]
+        try:
+            sum_dec = int(r.get("sum_declared", 0))
+        except (ValueError, TypeError):
+            sum_dec = 0
+            
+        try:
+            tot_acc_dec = int(r.get("total_accumulated_declared", 0))
+        except (ValueError, TypeError):
+            tot_acc_dec = 0
+            
+        corrected_shots, final_sum_dec, notes = triangular_y_corregir_serie(
+            shots, sum_dec, tot_acc_dec, prev_tot_acc_dec, category
+        )
+        
+        if tot_acc_dec > 0:
+            prev_tot_acc_dec = tot_acc_dec
+        else:
+            prev_tot_acc_dec = prev_tot_acc_dec + final_sum_dec
+            
+        cumulative_sum += final_sum_dec
+        
+        # Contar dinámicamente según la modalidad
+        if modalidad_val == "Aire Libre (Outdoor)":
+            count_x = sum(1 for s in corrected_shots if s == "X")
+            count_10 = sum(1 for s in corrected_shots if s == "10")
+            col7_val = count_x
+            col8_val = count_10
+        else:  # Sala (Indoor 18m)
+            count_10 = sum(1 for s in corrected_shots if s == "10" or s == "X")
+            count_9 = sum(1 for s in corrected_shots if s == "9")
+            col7_val = count_10
+            col8_val = count_9
+            
+        rows_list.append([
+            series_num,
+            corrected_shots[0],
+            corrected_shots[1],
+            corrected_shots[2],
+            final_sum_dec,
+            tot_acc_dec,
+            cumulative_sum,
+            col7_val,
+            col8_val
+        ])
+        
+    if not rows_list:
+        rows_list = [[i, "", "", "", 0, 0, 0, 0, 0] for i in range(1, 11)]
+        
+    cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Tot. Escrito", "Tot. Calculado", "10s", "9s"]
+    if modalidad_val == "Aire Libre (Outdoor)":
+        cols = ["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Tot. Escrito", "Tot. Calculado", "Xs", "10s"]
+        
+    df_target = pd.DataFrame(rows_list, columns=cols)
+    
+    # Renombrar target dinámicamente si aplica
+    real_key = data.get("target", target_to_retry) if target_to_retry == "Individual" else target_to_retry
+    real_key = str(real_key).strip().upper() if real_key else target_to_retry
+    if real_key:
+        real_key_clean = real_key.strip().upper()
+        if "CONTENCION" in real_key_clean or "DIANA" in real_key_clean or "EJ:" in real_key_clean or len(real_key_clean) > 5:
+            real_key = target_to_retry
+            
+    if target_to_retry != real_key and target_to_retry in state["transcribed_data"]:
+        del state["transcribed_data"][target_to_retry]
+        
+    state["transcribed_data"][real_key] = {
+        "archer_name": data.get("archer_name", ""),
+        "target": real_key,
+        "category": category,
+        "round": data.get("round", "1"),
+        "total_points_declared": int(data.get("total_points_declared", 0)),
+        "df_editor": df_target
+    }
+
+    state["active_target"] = real_key
+    active_data = state["transcribed_data"][real_key]
+    
+    # Recalcular lista de estados actualizados
+    all_targets = sorted(list(state["transcribed_data"].keys()))
+    reporte_status_actualizado = []
+    failed_targets = []
+    for t in all_targets:
+        name = state["transcribed_data"][t].get("archer_name", "")
+        if name.startswith("ERROR:") or name == "ERROR: Fallaron todos los intentos" or not name:
+            reporte_status_actualizado.append(f"{t} (❌ Falló)")
+            failed_targets.append(t)
+        else:
+            reporte_status_actualizado.append(f"{t} (🟢 Transcribido)")
+            
+    info_msg = f"🔄 [FORZAR REINTENTO INDIVIDUAL COMPLETADO] Estado actual de la hoja: {', '.join(reporte_status_actualizado)}"
+    total_calc, qa_report, status_alert = realizar_validacion_aritmetica(active_data["df_editor"], active_data["total_points_declared"], active_data["category"])
+    
+    dropdown_update = gr.update(
+        choices=all_targets,
+        value=real_key,
+        visible=True if len(all_targets) > 0 else False
+    )
+    
+    show_retry_box = len(failed_targets) > 0
+    individual_retry_group_update = gr.update(visible=show_retry_box)
+    target_retry_select_update = gr.update(
+        choices=failed_targets,
+        value=failed_targets[0] if failed_targets else None,
+        visible=show_retry_box
+    )
+    
+    yield (
+        info_msg,
+        active_data["archer_name"],
+        active_data["target"],
+        active_data["category"],
+        active_data["round"],
+        active_data["total_points_declared"],
+        active_data["df_editor"],
+        total_calc,
+        qa_report,
+        status_alert,
+        dropdown_update,
+        individual_retry_group_update,
+        target_retry_select_update,
+        state
+    )
 
 def realizar_validacion_aritmetica(df, total_declarado, category=""):
     total_calculado = 0
@@ -1085,13 +1444,28 @@ def realizar_validacion_aritmetica(df, total_declarado, category=""):
         except (ValueError, TypeError, IndexError):
             suma_dec = 0
             
+        try:
+            tot_escrito = int(row.iloc[5])
+        except (ValueError, TypeError, IndexError):
+            tot_escrito = 0
+
+        try:
+            tot_calc = int(row.iloc[6])
+        except (ValueError, TypeError, IndexError):
+            tot_calc = 0
+            
         if suma_serie != suma_dec:
             sugerencias = sugerir_correccion_tiros(tiros_str, suma_dec, category)
             s_text = ""
             if sugerencias:
-                s_text = "<br>&nbsp;&nbsp;&nbsp;&nbsp;💡 <b>Sugerencia de Autocorrección:</b> " + " o ".join([f"<u>{s}</u>" for s in sugerencias])
+                s_text = "<br>&nbsp;&nbsp;&nbsp;&nbsp;💡 <b>Sugerencia:</b> " + " o ".join([f"<u>{s}</u>" for s in sugerencias])
             discrepancias_series.append(
-                f"❌ <b>Serie #{num_serie}:</b> Suma aritmética ({suma_serie}) != Suma declarada ({suma_dec}) [Tiros: {row.iloc[1]}, {row.iloc[2]}, {row.iloc[3]}]" + s_text
+                f"❌ <b>Serie #{num_serie}:</b> Suma de tiros ({suma_serie}) != Suma declarada ({suma_dec}) [Tiros: {row.iloc[1]}, {row.iloc[2]}, {row.iloc[3]}]" + s_text
+            )
+            
+        if tot_escrito > 0 and tot_escrito != tot_calc:
+            discrepancias_series.append(
+                f"⚠️ <b>Serie #{num_serie}:</b> Tot. Escrito en papel ({tot_escrito}) != Tot. Calculado acumulado ({tot_calc})"
             )
             
     try:
@@ -1102,10 +1476,10 @@ def realizar_validacion_aritmetica(df, total_declarado, category=""):
     if total_calculado != tot_dec:
         discrepancias_series.append(f"❌ <b>Total General:</b> La suma real calculada ({total_calculado}) difiere del total general escrito ({tot_dec}).")
     if total_calculado == tot_dec and len(discrepancias_series) == 0:
-        status_alert = "<div style='background-color: #d4edda; color: #155724; padding: 15px; border-radius: 5px; border: 1px solid #c3e6cb; margin-top: 10px; font-weight: bold;'>💚 [CONCORDANCIA ABSOLUTA]: Todos los tiros individuales y sumas parciales coinciden perfectamente de forma lógica.</div>"
-        reporte_md = "🟢 Todos los controles aritméticos pasaron satisfactoriamente."
+        status_alert = "<div style='background-color: #d4edda; color: #155724; padding: 15px; border-radius: 5px; border: 1px solid #c3e6cb; margin-top: 10px; font-weight: bold;'>💚 [CONCORDANCIA ABSOLUTA]: Todos los tiros individuales, sumas parciales y acumulados coinciden de forma lógica.</div>"
+        reporte_md = "🟢 Todos los controles de triangulación pasaron satisfactoriamente."
     else:
-        status_alert = "<div style='background-color: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px; border: 1px solid #f5c6cb; margin-top: 10px; font-weight: bold;'>⚠️ [DISCREPANCIAS DETECTADAS]: El sistema detectó sumas inconsistentes. Sigue las sugerencias para corregir.</div>"
+        status_alert = "<div style='background-color: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px; border: 1px solid #f5c6cb; margin-top: 10px; font-weight: bold;'>⚠️ [DISCREPANCIAS DETECTADAS]: El sistema detectó inconsistencias. Sigue las sugerencias para corregir.</div>"
         reporte_md = "<br>".join(discrepancias_series)
     return total_calculado, reporte_md, status_alert
 
@@ -1114,9 +1488,11 @@ def recalcular_interactivo(df, total_dec, target_activo, state):
     if state and "transcribed_data" in state and target_activo in state["transcribed_data"]:
         category = state["transcribed_data"][target_activo].get("category", "")
         
-    # Recalcular Total Acumulado dinámicamente según la Suma de cada Serie
+    # Recalcular Total Acumulado dinámicamente según la Suma de cada Serie y contar 10s/9s/Xs
     cumulative_sum = 0
     new_rows = []
+    es_outdoor = "Xs" in df.columns
+    
     for idx, row in df.iterrows():
         try:
             sum_dec = int(row.iloc[4])
@@ -1124,6 +1500,20 @@ def recalcular_interactivo(df, total_dec, target_activo, state):
             sum_dec = 0
         cumulative_sum += sum_dec
         row.iloc[5] = cumulative_sum
+        
+        # Contar tiros en caliente para la grilla
+        tiros_str = [str(row.iloc[1]).strip().upper(), str(row.iloc[2]).strip().upper(), str(row.iloc[3]).strip().upper()]
+        if es_outdoor:
+            count_x = sum(1 for s in tiros_str if s == "X")
+            count_10 = sum(1 for s in tiros_str if s == "10")
+            row.iloc[6] = count_x
+            row.iloc[7] = count_10
+        else:
+            count_10 = sum(1 for s in tiros_str if s == "10" or s == "X")
+            count_9 = sum(1 for s in tiros_str if s == "9")
+            row.iloc[6] = count_10
+            row.iloc[7] = count_9
+            
         new_rows.append(row)
         
     df = pd.DataFrame(new_rows)
@@ -1220,16 +1610,16 @@ def guardar_todos_los_datos_state(state):
         return f"❌ Error en guardado masivo: {e}"
 
 # --- DISEÑO DE LA INTERFAZ GRADIO ---
-with gr.Blocks(title="🎯 Parser de Tiro con Arco - Gradio App v26") as demo:
+with gr.Blocks(title="🎯 Parser de Tiro con Arco - Gradio App v27") as demo:
     session_state = gr.State(value={"transcribed_data": {}, "active_target": None, "csv_filename": "torneo_indoor_san_francisco_detallado.csv"})
-    gr.Markdown("# 🎯 Parser de Tiro con Arco - Transcripción e IA Adaptativa (v26 Streaming & Despeje)")
+    gr.Markdown("# 🎯 Parser de Tiro con Arco - Transcripción e IA Adaptativa (v27 Robustez & Recuperación)")
     gr.Markdown("Sube una planilla de clasificación oficial (PDF o Imagen). El sistema segmentará cuadrantes automáticamente y ejecutará el OCR real en paralelo (ThreadPool) con NVIDIA NIM.")
 
     with gr.Row():
         with gr.Column(scale=1):
             gr.Markdown("### 🔑 Configuración del Sistema")
             gr.Markdown("ℹ️ <i>NVIDIA_API_KEY se lee automáticamente de forma segura en el backend desde tu archivo .env local. No se expone en la interfaz para prevenir vulnerabilidades de inspección.</i>")
-            model_select = gr.Textbox(label="⚙️ Modelo OCR de Resistencia (Estable)", value="minimaxai/minimax-m3 (Modelos fallidos comentados)", interactive=False, info="Se han desactivado temporalmente los modelos inestables o dados de baja. El procesamiento de los arqueros se realizará exclusivamente con minimaxai/minimax-m3 para probar su resistencia en lote.")
+            model_select = gr.Textbox(label="⚙️ Cadena de Fallback Multimodales (NVIDIA NIM v29)", value="1. llama-3.2-11b-vision ➔ 2. minimax-m3 ➔ 3. kimi-k3 ➔ 4. nemotron-3-nano-omni ➔ 5. nemotron-ocr-v2", interactive=False, info="El sistema procesa los arqueros en paralelo. Si un modelo alcanza el límite de tasa (429) o timeout, escala automáticamente por los nuevos modelos multimodales agregados a la biblioteca.")
             planilla_type = gr.Dropdown(label="Tipo de Planilla", choices=["clasificacion", "eliminatoria"], value="clasificacion")
             modalidad_type = gr.Dropdown(label="Modalidad de Competición", choices=["Sala (Indoor 18m)", "Aire Libre (Outdoor)"], value="Sala (Indoor 18m)")
             mode_select = gr.Dropdown(label="Segmentación Visual", choices=["Detección Automática", "Planilla Individual (1 Arquero)", "Hoja Completa (4 Arqueros)"], value="Detección Automática")
@@ -1255,6 +1645,17 @@ with gr.Blocks(title="🎯 Parser de Tiro con Arco - Gradio App v26") as demo:
         ocr_button = gr.Button("🤖 Ejecutar OCR Inteligente Paralelo Simultáneo (NVIDIA NIM)", variant="primary")
         ocr_retry_failed_button = gr.Button("🔄 Reintentar Cuadrantes Fallidos", variant="secondary")
     ocr_status_msg = gr.Markdown()
+    
+    with gr.Group(visible=False) as individual_retry_group:
+        gr.Markdown("### 🔄 Recuperación Individual Adaptativa")
+        gr.Markdown("Si algún arquero/cuadrante falló de forma persistente tras los 5 reintentos automáticos, selecciona cuál deseas volver a procesar individualmente:")
+        with gr.Row():
+            target_retry_select = gr.Dropdown(
+                label="🎯 Seleccionar arquero fallido para reintentar",
+                choices=[],
+                interactive=True
+            )
+            ocr_retry_specific_btn = gr.Button("🔄 Forzar Reintento del Seleccionado", variant="secondary")
     gr.Markdown("---")
     active_target_viewer = gr.Dropdown(label="👤 Ver / Editar Datos del Arquero Activo", choices=[], visible=False, interactive=True)
 
@@ -1270,12 +1671,12 @@ with gr.Blocks(title="🎯 Parser de Tiro con Arco - Gradio App v26") as demo:
         with gr.Column(scale=2):
             gr.Markdown("### ✍️ Consola de Edición de Tiros (Tipo Excel)")
             df_editor = gr.Dataframe(
-                headers=["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Total Acumulado", "10s", "9s"],
-                datatype=["number", "str", "str", "str", "number", "number", "number", "number"],
+                headers=["Serie", "Tiro 1", "Tiro 2", "Tiro 3", "Suma Serie", "Tot. Escrito", "Tot. Calculado", "10s", "9s"],
+                datatype=["number", "str", "str", "str", "number", "number", "number", "number", "number"],
                 row_count=10,
-                column_count=(8, "fixed"),
+                column_count=(9, "fixed"),
                 interactive=True,
-                label="Grilla de Puntuaciones (10 Series)"
+                label="Grilla de Puntuaciones (10 Series - Triangulación a 3 Puntas)"
             )
 
     gr.Markdown("---")
@@ -1315,11 +1716,16 @@ with gr.Blocks(title="🎯 Parser de Tiro con Arco - Gradio App v26") as demo:
         inputs=[file_uploader, mode_select, targets_to_process],
         outputs=[quota_estimation_box]
     )
-    ocr_button.click(fn=ejecutar_ocr_ia_multiple, inputs=[file_uploader, targets_to_process, model_select, planilla_type, modalidad_type, session_state], outputs=[ocr_status_msg, archer_name_box, target_box, category_box, round_box, total_declared_box, df_editor, total_calculated_box, discrepancy_report_box, validation_alert_box, active_target_viewer, session_state])
+    ocr_button.click(fn=ejecutar_ocr_ia_multiple, inputs=[file_uploader, targets_to_process, model_select, planilla_type, modalidad_type, session_state], outputs=[ocr_status_msg, archer_name_box, target_box, category_box, round_box, total_declared_box, df_editor, total_calculated_box, discrepancy_report_box, validation_alert_box, active_target_viewer, individual_retry_group, target_retry_select, session_state])
     ocr_retry_failed_button.click(
         fn=reintentar_fallidos_ia,
-        inputs=[file_uploader, model_select, planilla_type, session_state],
-        outputs=[ocr_status_msg, archer_name_box, target_box, category_box, round_box, total_declared_box, df_editor, total_calculated_box, discrepancy_report_box, validation_alert_box, active_target_viewer, session_state]
+        inputs=[file_uploader, model_select, planilla_type, modalidad_type, session_state],
+        outputs=[ocr_status_msg, archer_name_box, target_box, category_box, round_box, total_declared_box, df_editor, total_calculated_box, discrepancy_report_box, validation_alert_box, active_target_viewer, individual_retry_group, target_retry_select, session_state]
+    )
+    ocr_retry_specific_btn.click(
+        fn=reintentar_especifico_ia,
+        inputs=[file_uploader, target_retry_select, model_select, planilla_type, modalidad_type, session_state],
+        outputs=[ocr_status_msg, archer_name_box, target_box, category_box, round_box, total_declared_box, df_editor, total_calculated_box, discrepancy_report_box, validation_alert_box, active_target_viewer, individual_retry_group, target_retry_select, session_state]
     )
     active_target_viewer.change(
         fn=cambiar_arquero_activo,
@@ -1344,7 +1750,7 @@ with gr.Blocks(title="🎯 Parser de Tiro con Arco - Gradio App v26") as demo:
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("🚀 Iniciando Interfaz Local de Procesamiento de Arquería (Gradio Standalone - v24)")
+    print("🚀 Iniciando Interfaz Local de Procesamiento de Arquería (Gradio Standalone - v27)")
     print("🌍 Abre tu navegador en: http://localhost:7860")
     print("=" * 60)
     demo.launch(server_name="0.0.0.0", server_port=7860, share=False, theme=gr.themes.Default())
