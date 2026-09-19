@@ -432,10 +432,10 @@ class ArcheryOCR:
             raise RuntimeError(f"Fallo en llamada a NVIDIA NIM ({self.model_name}): {str(e)}") from e
 class ArcherySegmenter:
     @staticmethod
-    def analizar_layout_y_ocupacion(ruta_imagen):
+    def analizar_layout_y_ocupacion(ruta_imagen, tipo_planilla="clasificacion"):
         """
         Analiza dinámicamente la imagen abriéndola con Pillow y procesándola con OpenCV para detectar:
-        1. Cantidad de arqueros en la planilla (4 o 1).
+        1. Cantidad de arqueros en la planilla (4, 2 o 1).
         2. Cuadrantes activos/ocupados (descarta cuadrantes vacíos/blancos).
         """
         try:
@@ -444,7 +444,6 @@ class ArcherySegmenter:
             import numpy as np
             import os
             
-            # Abrir de forma segura con Pillow (soporta rutas unicode, espacios y temp files)
             pil_img = Image.open(ruta_imagen)
             img_np = np.array(pil_img.convert('RGB'))
             gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
@@ -452,13 +451,35 @@ class ArcherySegmenter:
             
             filename = os.path.basename(ruta_imagen).lower()
             
-            # Pista 1: Nombre del archivo
-            if "4-arqueros" in filename or "hoja" in filename or "planillas" in filename or "cuadrantes" in filename:
-                es_hoja_completa = True
+            # Pista 1: Detección de Eliminatorias / 2 Arqueros
+            if tipo_planilla == "eliminatoria" or "eliminac" in filename or "2-arqueros" in filename or "2_arqueros" in filename or "enfrentamiento" in filename or "duelo" in filename:
+                _, thresh = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY_INV)
+                activos = []
+                
+                # Evaluar lado izquierdo (1A)
+                crop_izq = thresh[int(h*0.15):int(h*0.85), int(w*0.05):int(w*0.45)]
+                if np.mean(crop_izq) > 0.8:
+                    activos.append("1A")
+                    
+                # Evaluar lado derecho (1B)
+                crop_der = thresh[int(h*0.15):int(h*0.85), int(w*0.55):int(w*0.95)]
+                if np.mean(crop_der) > 0.8:
+                    activos.append("1B")
+                    
+                if not activos:
+                    activos = ["1A", "1B"]
+                    
+                return "2_arqueros", activos
+
+            # Pista 2: Individual
             elif "1a-" in filename or "individual" in filename or "crop_" in filename:
-                es_hoja_completa = False
+                return "1_arquero", ["Individual"]
+
+            # Pista 3: 4 Arqueros por nombre
+            elif "4-arqueros" in filename or "hoja" in filename or "planillas" in filename or "cuadrantes" in filename:
+                es_hoja_completa = True
             else:
-                # Pista 2: Detección visual de líneas horizontales de tablas en la mitad superior e inferior
+                # Detección visual de líneas horizontales de tablas
                 _, thresh = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY_INV)
                 
                 kernel_h = cv2.getStructuringElement(cv2.MORPH_RECT, (max(10, w // 20), 1))
@@ -473,7 +494,6 @@ class ArcherySegmenter:
                 if has_top_tables and has_bot_tables:
                     es_hoja_completa = True
                 elif w > 500 and h > 500 and (0.45 < (w / h) < 1.85):
-                    # Por defecto para cualquier captura de hoja completa
                     es_hoja_completa = True
                 else:
                     es_hoja_completa = False
@@ -506,7 +526,28 @@ class ArcherySegmenter:
                 return "1_arquero", ["Individual"]
         except Exception as e:
             print(f"⚠️ Error en análisis OpenCV de layout: {e}")
+            if tipo_planilla == "eliminatoria":
+                return "2_arqueros", ["1A", "1B"]
             return "4_arqueros", ["1A", "1B", "1C", "1D"]
+
+    @staticmethod
+    def segmentar_planilla_2_arqueros(ruta_imagen, carpeta_salida):
+        if not os.path.exists(carpeta_salida):
+            os.makedirs(carpeta_salida)
+        img = Image.open(ruta_imagen)
+        ancho, alto = img.size
+        mitad_x = ancho // 2
+        cuadrantes = {
+            "1A": (0, 0, mitad_x, alto),
+            "1B": (mitad_x, 0, ancho, alto)
+        }
+        recortes = {}
+        for arquero, coords in cuadrantes.items():
+            crop_img = img.crop(coords)
+            ruta_salida = os.path.join(carpeta_salida, f"crop_{arquero}.png")
+            crop_img.save(ruta_salida, "PNG")
+            recortes[arquero] = ruta_salida
+        return recortes
 
     @staticmethod
     def segmentar_planilla_4_arqueros(ruta_imagen, carpeta_salida):
@@ -754,7 +795,7 @@ def sugerir_correccion_tiros(tiros, suma_dec, category=""):
             sugerencias.append(f"Cambiar <b>{labels[i]}</b> (leído '{tiros[i]}') por <b>'{val_str}'</b>")
     return sugerencias
 
-def procesar_archivo_upload(file_input, mode_input, state):
+def procesar_archivo_upload(file_input, mode_input, tipo_planilla, state):
     global session_crops
     session_crops.clear()
     if not state:
@@ -779,19 +820,46 @@ def procesar_archivo_upload(file_input, mode_input, state):
     else:
         imagen_final = file_path
         gr_msg = f"📸 Imagen '{os.path.basename(file_path)}' cargada con éxito. Base de datos de guardado: {csv_filename}"
-    # Detección inteligente de layout y ocupación con OpenCV
+    
+    # Detección inteligente de layout y ocupación
     tipo_layout = "1_arquero"
     cuadrantes_activos = ["Individual"]
     
     if mode_input == "Hoja Completa (4 Arqueros)":
         tipo_layout = "4_arqueros"
         cuadrantes_activos = ["1A", "1B", "1C", "1D"]
+    elif mode_input == "Planilla Eliminatoria (2 Arqueros)":
+        tipo_layout = "2_arqueros"
+        cuadrantes_activos = ["1A", "1B"]
     elif mode_input == "Planilla Individual (1 Arquero)":
         tipo_layout = "1_arquero"
         cuadrantes_activos = ["Individual"]
     else:  # Detección Automática
-        tipo_layout, cuadrantes_activos = ArcherySegmenter.analizar_layout_y_ocupacion(imagen_final)
+        tipo_layout, cuadrantes_activos = ArcherySegmenter.analizar_layout_y_ocupacion(imagen_final, tipo_planilla=tipo_planilla)
         
+    if tipo_layout == "2_arqueros":
+        try:
+            crops = ArcherySegmenter.segmentar_planilla_2_arqueros(imagen_final, temp_dir)
+            session_crops = crops
+            inactivos = [c for c in ["1A", "1B"] if c not in cuadrantes_activos]
+            msg_ocupacion = f" ✂️ Detección Automática: Planilla de Eliminatorias (2 Arqueros / Enfrentamiento). Activos: {', '.join(cuadrantes_activos)}."
+            if inactivos:
+                msg_ocupacion += f" (Desmarcados: {', '.join(inactivos)})."
+                
+            gr_msg += msg_ocupacion
+            return (
+                gr_msg,
+                imagen_final,
+                gr.update(value=crops["1A"], visible=True),
+                gr.update(value=crops["1B"], visible=True),
+                gr.update(value=None, visible=False),
+                gr.update(value=None, visible=False),
+                gr.update(choices=["1A", "1B"], value=cuadrantes_activos, visible=True),
+                state
+            )
+        except Exception as e:
+            return f"❌ Error en segmentación visual de eliminatoria: {e}", imagen_final, gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(choices=["Individual"], value=["Individual"], visible=False), state
+
     if tipo_layout == "4_arqueros":
         try:
             crops = ArcherySegmenter.segmentar_planilla_4_arqueros(imagen_final, temp_dir)
@@ -1749,7 +1817,7 @@ with gr.Blocks(title="🎯 Parser de Tiro con Arco - Gradio App v32") as demo:
             model_select = gr.Textbox(label="⚙️ Cadena de Fallback Multimodales (NVIDIA NIM v29)", value="1. llama-3.2-11b-vision ➔ 2. minimax-m3 ➔ 3. kimi-k3 ➔ 4. nemotron-3-nano-omni ➔ 5. nemotron-ocr-v2", interactive=False, info="El sistema procesa los arqueros en paralelo. Si un modelo alcanza el límite de tasa (429) o timeout, escala automáticamente por los nuevos modelos multimodales agregados a la biblioteca.")
             planilla_type = gr.Dropdown(label="Tipo de Planilla", choices=["clasificacion", "eliminatoria"], value="clasificacion")
             modalidad_type = gr.Dropdown(label="Modalidad de Competición", choices=["Sala (Indoor 18m)", "Aire Libre (Outdoor)"], value="Sala (Indoor 18m)")
-            mode_select = gr.Dropdown(label="Segmentación Visual", choices=["Detección Automática", "Planilla Individual (1 Arquero)", "Hoja Completa (4 Arqueros)"], value="Detección Automática")
+            mode_select = gr.Dropdown(label="Segmentación Visual", choices=["Detección Automática", "Planilla Individual (1 Arquero)", "Planilla Eliminatoria (2 Arqueros)", "Hoja Completa (4 Arqueros)"], value="Detección Automática")
             file_uploader = gr.File(label="Cargar Planilla Escaneada o PDF", file_types=[".png", ".jpg", ".jpeg", ".pdf"])
             upload_status = gr.Markdown(value="Esperando archivo...")
             quota_estimation_box = gr.HTML(value="<div style='color: #856404; background-color: #fff3cd; border: 1px solid #ffeeba; padding: 10px; border-radius: 5px; font-weight: bold;'>⚠️ Sube una planilla para estimar el consumo de cuota.</div>")
@@ -1824,7 +1892,12 @@ with gr.Blocks(title="🎯 Parser de Tiro con Arco - Gradio App v32") as demo:
     # --- VÍNCULOS DE EVENTOS ---
     file_uploader.change(
         fn=procesar_archivo_upload,
-        inputs=[file_uploader, mode_select, session_state],
+        inputs=[file_uploader, mode_select, planilla_type, session_state],
+        outputs=[upload_status, original_image_viewer, crop_1a, crop_1b, crop_1c, crop_1d, targets_to_process, session_state]
+    )
+    planilla_type.change(
+        fn=procesar_archivo_upload,
+        inputs=[file_uploader, mode_select, planilla_type, session_state],
         outputs=[upload_status, original_image_viewer, crop_1a, crop_1b, crop_1c, crop_1d, targets_to_process, session_state]
     ).then(
         fn=actualizar_estimacion_interactiva,
@@ -1833,6 +1906,10 @@ with gr.Blocks(title="🎯 Parser de Tiro con Arco - Gradio App v32") as demo:
     )
     
     mode_select.change(
+        fn=procesar_archivo_upload,
+        inputs=[file_uploader, mode_select, planilla_type, session_state],
+        outputs=[upload_status, original_image_viewer, crop_1a, crop_1b, crop_1c, crop_1d, targets_to_process, session_state]
+    ).then(
         fn=actualizar_estimacion_interactiva,
         inputs=[file_uploader, mode_select, targets_to_process],
         outputs=[quota_estimation_box]
