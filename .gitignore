@@ -15,3 +15,5 @@ app/temp_crops/
 # Archivos del sistema
 .DS_Store
 Thumbs.db
+
+/venv_ia_proyecto/
