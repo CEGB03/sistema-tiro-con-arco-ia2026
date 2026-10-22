@@ -9,8 +9,6 @@ __pycache__/
 
 # Datos temporales y recortes de imágenes de planillas
 app/temp_crops/
-*.jpg
-*.png
 
 # Archivos del sistema
 .DS_Store
