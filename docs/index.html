@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sistema de Tiro con Arco IA</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; background: #0f172a; color: #e2e8f0; }
+    .hero { max-width: 900px; margin: 0 auto; padding: 80px 24px; text-align: center; }
+    h1 { font-size: 2.5rem; margin-bottom: 0.5rem; }
+    .tag { color: #38bdf8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .lead { font-size: 1.15rem; color: #94a3b8; margin: 1rem 0 2rem; }
+    .cta { display: inline-block; background: #38bdf8; color: #0f172a; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 700; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 40px; }
+    .card { background: #1e293b; padding: 20px; border-radius: 12px; border: 1px solid #334155; text-align: left; }
+    .card h3 { margin-top: 0; color: #38bdf8; }
+    footer { text-align: center; padding: 40px 24px; color: #64748b; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <section class="hero">
+    <p class="tag">Inteligencia Artificial — 2026</p>
+    <h1>Transcripción automática de planillas de tiro con arco</h1>
+    <p class="lead">Sistema multi-agente que clasifica, segmenta y transcribe planillas de clasificación y eliminatorias usando visión por computadora y modelos multimodales de NVIDIA NIM.</p>
+    <a class="cta" href="https://github.com/halexisgonzalez/sistema-tiro-con-arco-ia2026">Ver repositorio</a>
+    <div class="grid">
+      <div class="card"><h3>Agente 1</h3><p>Clasificador y segmentador de planillas (PDF/imagen → manifiesto JSON).</p></div>
+      <div class="card"><h3>Agente 2</h3><p>Transcripción OCR con modelos multimodales de NVIDIA NIM.</p></div>
+      <div class="card"><h3>Orquestador</h3><p>Interfaz Gradio con visualización y exportación a CSV.</p></div>
+    </div>
+  </section>
+  <footer>© 2026 Alexis González — MIT</footer>
+</body>
+</html>
