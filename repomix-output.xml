@@ -82,6 +82,176 @@ requirements.txt
 <files>
 This section contains the contents of the repository's files.
 
+<file path="data/processed/torneo_indoor_san_francisco_detallado.csv">
+Target,Archer,Category,Round,Total_Score,1_1,1_2,1_3,2_1,2_2,2_3,3_1,3_2,3_3,4_1,4_2,4_3,5_1,5_2,5_3,6_1,6_2,6_3,7_1,7_2,7_3,8_1,8_2,8_3,9_1,9_2,9_3,10_1,10_2,10_3
+1A,Leguiza Marcelo Gabriel,Recurvo Masculino (RM),1,254,10,9,8,9,9,7,10,9,9,10,9,7,9,8,10,10,9,9,9,9,6,10,10,9,10,7,7,10,9,7
+1A,Leguiza Marcelo Gabriel,Recurvo Masculino (RM),2,247,10,9,8,9,9,M,10,9,6,9,9,8,10,8,8,9,8,7,9,8,6,10,9,7,10,8,8,10,8,8
+1B,Romero Braian Gabriel,Recurvo Masculino (RM),1,226,9,9,8,10,8,7,9,9,7,9,9,9,8,8,8,9,9,8,8,7,M,8,8,M,9,8,7,10,8,M
+1B,Romero Braian Gabriel,Recurvo Masculino (RM),2,150,8,M,M,8,M,M,7,6,M,9,M,M,9,9,8,9,7,M,3,8,M,9,7,M,9,8,6,9,6,M
+1C,Wendler Luis Miguel,Recurvo Masculino (RM),1,248,10,9,8,9,9,7,9,8,7,10,8,8,9,9,9,10,10,9,10,9,8,9,8,8,10,9,9,9,7,6
+1C,Wendler Luis Miguel,Recurvo Masculino (RM),2,240,9,9,7,10,8,8,10,10,8,8,8,7,10,8,M,9,9,7,10,7,6,9,9,8,8,7,6,9,9,7
+1D,Delhom Matias Ezequiel,Recurvo Masculino (RM),1,269,9,7,7,9,9,7,9,9,8,9,9,9,10,9,9,10,9,8,10,9,9,9,9,6,10,10,10,10,8,8
+1D,Delhom Matias Ezequiel,Recurvo Masculino (RM),2,257,10,8,8,9,8,7,10,9,8,10,10,9,9,9,8,9,9,9,9,9,9,10,9,8,9,9,8,9,9,M
+2A,Bianchi Andreotti Pablo Esteban,Recurvo Masculino (RM),1,265,10,8,7,10,10,10,10,9,9,10,9,6,10,10,8,10,9,8,9,9,7,10,8,7,9,8,8,10,10,9
+2A,Bianchi Andreotti Pablo Esteban,Recurvo Masculino (RM),2,256,10,8,8,10,8,8,10,9,7,10,9,8,10,9,8,10,7,7,10,10,9,9,9,8,10,8,8,7,6,6
+2B,Peralta Ivana Elizabeth,Recurvo Femenino (RW),1,218,9,7,M,7,6,M,10,9,6,8,7,7,7,7,M,9,9,8,10,7,7,9,8,8,8,8,7,9,8,7
+2B,Peralta Ivana Elizabeth,Recurvo Femenino (RW),2,177,8,8,M,7,6,6,8,7,M,7,6,M,8,7,6,7,7,7,8,7,7,8,8,6,9,M,M,8,7,6
+3A,Sanchez Gonzalo Javier,Compuesto Masculino (CM),1,240,9,8,6,10,9,7,10,9,7,9,9,7,9,9,7,9,9,8,10,9,9,9,9,8,9,9,9,8,M,M
+3A,Sanchez Gonzalo Javier,Compuesto Masculino (CM),2,260,9,8,8,9,9,8,9,9,8,10,9,7,10,9,9,10,9,8,9,8,7,9,9,9,9,9,8,10,9,8
+3B,Rodriguez Eduardo Angel,Compuesto Masculino (CM),1,272,10,10,9,9,9,9,10,9,8,10,10,9,10,10,9,10,9,9,9,9,9,9,9,8,9,9,9,9,9,7
+3B,Rodriguez Eduardo Angel,Compuesto Masculino (CM),2,270,9,8,7,9,9,9,10,9,9,9,9,9,9,9,8,10,9,7,10,10,9,10,9,9,9,9,9,10,9,9
+3C,Tonoli Ettlin Pablo Ernesto Esteban,Compuesto Masculino (CM),1,286,10,9,9,10,10,9,10,10,10,9,9,9,10,10,10,10,10,9,10,9,9,10,9,9,10,10,9,10,9,9
+3C,Tonoli Ettlin Pablo Ernesto Esteban,Compuesto Masculino (CM),2,277,9,9,9,9,9,9,9,9,9,10,9,9,10,9,9,10,9,8,10,9,9,10,9,9,10,10,9,10,9,9
+4A,Filippelli Moreno Matias Nicolas,Compuesto Masculino (CM),1,274,9,9,8,10,9,9,10,9,9,9,9,8,9,9,8,10,10,9,10,10,8,10,10,8,10,9,9,10,9,9
+4A,Filippelli Moreno Matias Nicolas,Compuesto Masculino (CM),2,266,9,8,8,10,9,8,10,9,7,10,10,8,9,9,9,9,9,8,10,9,9,9,9,8,10,9,9,10,9,6
+4B,Torales Sergio Martin,Compuesto Masculino (CM),1,215,9,6,M,9,7,7,9,9,8,9,9,M,9,9,6,9,9,6,8,M,M,9,8,7,9,8,8,9,7,6
+4B,Torales Sergio Martin,Compuesto Masculino (CM),2,192,9,8,M,9,9,8,9,8,M,8,7,M,9,9,6,8,8,M,8,8,7,7,6,M,9,8,M,10,8,6
+4C,Torales Fochesatto Sofia,Compuesto Cazador A2 Femenino (CAA2 W),1,257,9,8,6,9,9,8,10,10,8,9,9,8,10,9,9,9,9,9,10,9,8,8,8,7,9,9,7,9,9,7
+4C,Torales Fochesatto Sofia,Compuesto Cazador A2 Femenino (CAA2 W),2,254,9,9,8,9,9,9,9,9,M,10,9,9,10,9,9,9,9,8,9,7,6,9,9,9,9,9,9,9,9,7
+5A,Castellanos Denis Esteban,Raso Masculino (BM),1,268,10,9,7,9,8,7,10,9,9,10,9,9,10,9,7,10,10,10,10,9,9,9,8,8,9,9,8,10,10,9
+5A,Castellanos Denis Esteban,Raso Masculino (BM),2,268,9,8,7,9,9,8,10,9,7,10,9,7,9,9,9,10,10,9,10,9,7,10,8,8,10,10,9,10,10,9
+5B,Vaca Alejandro Daniel,Raso Masculino (BM),1,215,9,6,6,10,7,6,9,6,6,8,7,6,7,6,3,10,7,7,9,8,6,9,7,7,10,6,4,9,8,6
+5B,Vaca Alejandro Daniel,Raso Masculino (BM),2,206,9,8,5,9,8,8,8,8,7,9,8,4,8,8,6,7,6,5,9,7,M,9,7,3,8,8,4,9,7,5
+5C,Urbani Victor Daniel,Raso Masculino (BM),1,241,8,8,7,8,7,5,9,8,7,10,9,8,10,7,6,9,8,7,10,8,5,9,8,7,10,9,7,10,10,8
+5C,Urbani Victor Daniel,Raso Masculino (BM),2,221,10,6,5,7,7,5,10,9,8,9,7,7,10,6,4,8,8,5,9,8,7,7,6,4,10,9,7,10,7,6
+5D,Rocco Nazareno Antonio,Raso Masculino (BM),1,214,10,4,M,10,9,4,10,8,5,8,8,8,9,7,6,7,7,4,10,7,4,8,7,7,8,8,8,9,9,5
+5D,Rocco Nazareno Antonio,Raso Masculino (BM),2,221,10,7,6,9,7,6,10,8,8,10,8,6,9,8,4,10,8,7,8,8,6,7,6,6,9,5,3,9,7,6
+6B,Brue Angel Luis,Raso Masculino (BM),1,248,10,10,7,10,8,6,10,8,5,10,10,8,10,7,6,9,8,6,9,8,5,10,9,9,9,8,7,10,9,8
+6B,Brue Angel Luis,Raso Masculino (BM),2,221,9,7,6,8,7,7,10,8,6,10,8,6,10,6,6,9,8,7,10,9,3,9,9,7,9,9,8,7,4,M
+6C,Torres Angela Mariana,Raso Femenino (BW),1,188,9,8,6,8,7,7,9,6,3,8,8,5,10,3,1,9,6,5,7,5,4,8,6,5,10,6,3,6,6,4
+6C,Torres Angela Mariana,Raso Femenino (BW),2,159,4,6,5,8,5,2,5,3,2,8,7,3,6,5,4,6,5,4,10,6,4,7,5,4,8,7,M,6,6,3
+6D,Danna Susana Laura,Raso Femenino (BW),1,210,10,9,8,9,5,5,9,9,7,8,7,6,7,4,3,10,8,4,9,7,4,10,8,8,9,8,M,7,6,6
+6D,Danna Susana Laura,Raso Femenino (BW),2,159,6,3,1,8,7,4,7,6,4,9,6,3,5,3,M,8,4,4,6,3,2,9,8,7,9,4,2,9,7,5
+7A,Genovesio Gonzalo,Raso Masculino 50+ (B 50M),1,205,8,7,5,9,8,2,7,6,2,8,7,6,9,9,6,6,6,6,8,6,5,9,6,5,9,8,8,9,8,7
+7A,Genovesio Gonzalo,Raso Masculino 50+ (B 50M),2,219,8,8,6,9,9,8,8,5,5,9,7,1,9,7,7,8,8,8,9,7,5,10,7,4,10,10,9,7,6,5
+7B,Barros Gustavo Seferino,Raso Masculino 50+ (B 50M),1,197,7,3,3,9,6,5,9,8,3,8,7,6,8,7,2,8,6,3,10,7,6,8,8,7,8,8,8,8,7,4
+7B,Barros Gustavo Seferino,Raso Masculino 50+ (B 50M),2,146,6,5,M,6,3,M,6,4,1,5,4,M,9,7,7,8,7,3,9,7,4,10,9,3,6,4,3,6,4,1
+7C,Sanchez Javier Ramon,Raso Masculino 50+ (B 50M),1,204,8,7,5,8,6,6,7,6,4,10,6,4,8,6,5,10,7,5,9,9,7,9,9,5,8,6,5,9,6,4
+7C,Sanchez Javier Ramon,Raso Masculino 50+ (B 50M),2,189,9,8,6,9,9,3,9,7,7,10,6,5,5,4,1,7,6,3,10,7,4,8,6,4,9,7,5,6,5,3
+7D,Trossero Andrio,Raso Masculino 50+ (B 50M),1,175,8,7,3,7,6,3,6,4,2,8,5,4,9,8,8,7,6,4,9,8,8,9,3,2,9,4,M,6,3,M
+7D,Trossero Andrio,Raso Masculino 50+ (B 50M),2,194,7,6,5,9,6,4,6,5,4,9,3,2,10,8,5,10,10,6,8,7,6,8,5,5,8,7,6,8,7,6
+8A,Pinto Alberto Roman,Raso Masculino (BM),1,231,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
+8A,Pinto Alberto Roman,Raso Masculino (BM),2,227,9,7,8,9,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
+8B,Pisani Daniel Gaudencio,Raso Masculino 50+ (B 50M),1,206,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,5,7,7,5,7,8,5,7
+8B,Pisani Daniel Gaudencio,Raso Masculino 50+ (B 50M),2,217,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
+8C,Lopez Walter,Raso Masculino 50+ (B 50M),1,204,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,5,7,8,5,7,8,5,7,7,5,7,8,5,7
+8C,Lopez Walter,Raso Masculino 50+ (B 50M),2,220,8,6,7,8,6,7,8,6,7,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
+8D,Leal Carlos Eduardo,Raso Masculino 50+ (B 50M),1,168,7,5,6,7,5,6,7,4,6,6,4,6,7,4,6,6,4,6,7,4,6,6,4,6,7,4,6,6,4,6
+8D,Leal Carlos Eduardo,Raso Masculino 50+ (B 50M),2,167,7,5,6,7,4,6,7,4,6,6,4,6,7,4,6,6,4,6,7,4,6,6,4,6,7,4,6,6,4,6
+9B,Foglia Eduardo Santiago,Recurvo Escuela 40 (R E40),1,223,8,6,7,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
+9B,Foglia Eduardo Santiago,Recurvo Escuela 40 (R E40),2,210,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,5,8
+9C,Britos Joaquin Elias,Recurvo Escuela 40 (R E40),1,253,9,7,8,9,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
+9C,Britos Joaquin Elias,Recurvo Escuela 40 (R E40),2,234,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,8,6,8,9,6,8,8,6,8
+9D,Martinez Jorge,Recurvo Escuela 40 (R E40),1,161,6,4,5,6,4,5,6,4,6,6,4,6,7,4,6,6,4,6,7,4,6,6,4,6,7,4,6,6,4,6
+9D,Martinez Jorge,Recurvo Escuela 40 (R E40),2,199,8,6,7,8,6,7,8,5,7,8,5,7,7,5,7,8,5,7,7,5,7,8,5,7,7,5,7,8,5,7
+10A,Amaya Martin,Recurvo Escuela 40 (R E40),1,213,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,9,6,8,8,6,8
+10A,Amaya Martin,Recurvo Escuela 40 (R E40),2,220,8,6,7,8,6,7,8,6,7,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
+10B,Garcia Moretta Francisco Tomas,Recurvo Escuela 40 (R E40),1,214,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,8,9,6,8,8,6,8
+10B,Garcia Moretta Francisco Tomas,Recurvo Escuela 40 (R E40),2,227,9,7,8,9,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
+10C,Echenique Elias Pablo,Recurvo Escuela 40 (R E40),1,236,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,9,6,8,8,6,8
+10C,Echenique Elias Pablo,Recurvo Escuela 40 (R E40),2,229,9,7,8,9,7,8,9,6,8,9,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
+10D,Comia Luis Marcelo,Recurvo Escuela 40 (R E40),1,221,8,6,7,8,6,7,8,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
+10D,Comia Luis Marcelo,Recurvo Escuela 40 (R E40),2,234,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,8,6,8,9,6,8,8,6,8
+11A,Rios Franco Andres,Recurvo Escuela 40 (R E40),1,214,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,8,9,6,8,8,6,8
+11A,Rios Franco Andres,Recurvo Escuela 40 (R E40),2,203,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,5,7,7,5,7,8,5,7,7,5,7,8,5,7
+11B,Pinto Victor Emanuel,Recurvo Escuela 40 (R E40),1,250,9,7,8,9,7,8,9,7,8,9,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
+11B,Pinto Victor Emanuel,Recurvo Escuela 40 (R E40),2,254,9,7,8,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
+11C,Hernandez Leonardo Javier,Recurvo Escuela 40 (R E40),1,224,8,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
+11C,Hernandez Leonardo Javier,Recurvo Escuela 40 (R E40),2,181,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,7
+11D,Lunedei Valentino,Recurvo Sub 15 (R U15M),1,257,10,8,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
+11D,Lunedei Valentino,Recurvo Sub 15 (R U15M),2,238,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,9,6,8
+12A,Spertino Raul Armando,Recurvo Escuela 60 (R E60),1,243,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,9,10,7,9
+12A,Spertino Raul Armando,Recurvo Escuela 60 (R E60),2,249,9,7,8,9,7,8,9,7,8,9,7,8,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
+12B,Gelosi Patricia Alejandra,Recurvo Escuela 60 (R E60),1,250,9,7,8,9,7,8,9,7,8,9,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
+12B,Gelosi Patricia Alejandra,Recurvo Escuela 60 (R E60),2,251,9,7,8,9,7,8,9,7,8,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
+12C,Andueza Gerardo Miguel,Recurvo Escuela 60 (R E60),1,238,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,9,6,8
+12C,Andueza Gerardo Miguel,Recurvo Escuela 60 (R E60),2,235,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,9,6,8,9,6,8,8,6,8
+12D,Garrido Natalia Andrea,Recurvo Escuela 60 (R E60),1,236,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,9,6,8,8,6,8
+12D,Garrido Natalia Andrea,Recurvo Escuela 60 (R E60),2,245,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,10,7,9,9,7,9,10,7,9
+13A,Peralta Marcela Edith,Recurvo Escuela 60 (R E60),1,248,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
+13A,Peralta Marcela Edith,Recurvo Escuela 60 (R E60),2,218,8,6,7,8,6,7,8,6,7,8,6,7,8,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
+13B,Carnero Mariana,Recurvo Escuela 60 (R E60),1,202,8,6,7,8,6,7,8,6,7,8,6,7,8,5,7,8,5,7,7,5,7,8,5,7,7,5,7,8,5,7
+13B,Carnero Mariana,Recurvo Escuela 60 (R E60),2,186,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,7,8,5,7,7,5,7,8,5,7
+13C,Cantisani Maria Luz,Recurvo Escuela 60 (R E60),1,258,10,8,9,10,7,9,10,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
+13C,Cantisani Maria Luz,Recurvo Escuela 60 (R E60),2,250,9,7,8,9,7,8,9,7,8,9,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
+13D,Acastello Lautaro Ariel,Raso Escuela 60 (B E60),1,207,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,5,7,8,5,7,8,5,7
+13D,Acastello Lautaro Ariel,Raso Escuela 60 (B E60),2,222,8,6,7,8,6,7,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
+14A,Barrera Paola Ester,Raso Escuela 60 (B E60),1,181,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,7
+14A,Barrera Paola Ester,Raso Escuela 60 (B E60),2,172,7,5,6,7,5,6,7,5,6,7,5,6,7,4,6,7,4,6,7,4,6,6,4,6,7,4,6,6,4,6
+14B,Rivadero Sergio Benito,Raso Escuela 60 (B E60),1,252,9,7,8,9,7,8,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
+14B,Rivadero Sergio Benito,Raso Escuela 60 (B E60),2,250,9,7,8,9,7,8,9,7,8,9,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
+14C,Alegre Leandro Gaston,Raso Escuela 60 (B E60),1,247,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,9,9,7,9,10,7,9,9,7,9,10,7,9
+14C,Alegre Leandro Gaston,Raso Escuela 60 (B E60),2,251,9,7,8,9,7,8,9,7,8,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
+15A,Acastello German Dario,Raso Escuela 60 (B E60),1,219,8,6,7,8,6,7,8,6,7,8,6,7,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
+15A,Acastello German Dario,Raso Escuela 60 (B E60),2,225,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
+15C,Grande Matias Jesus,Raso Escuela 60 (B E60),1,211,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,8
+15C,Grande Matias Jesus,Raso Escuela 60 (B E60),2,238,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,9,6,8
+16A,Callejo Matias Nicolas,Raso Escuela 60 (B E60),1,175,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,4,6,7,4,6,7,4,6,6,4,6
+16A,Callejo Matias Nicolas,Raso Escuela 60 (B E60),2,187,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,7,7,5,7,8,5,7,7,5,7,8,5,7
+16B,Montoya Maricel Del Valle,Raso Escuela 60 (B E60),1,238,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,9,6,8
+16B,Montoya Maricel Del Valle,Raso Escuela 60 (B E60),2,250,9,7,8,9,7,8,9,7,8,9,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
+16C,Groppo Florencia,Raso Escuela 60 (B E60),1,242,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,10,7,9
+16C,Groppo Florencia,Raso Escuela 60 (B E60),2,251,9,7,8,9,7,8,9,7,8,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
+17A,Torres Serena,Recurvo Escuela 80 (R E80),1,267,10,8,9,10,8,9,10,8,9,10,8,9,10,8,9,10,8,9,10,8,9,10,7,9,10,7,9,10,7,9
+17A,Torres Serena,Recurvo Escuela 80 (R E80),2,263,10,8,9,10,8,9,10,8,9,10,8,9,10,8,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
+17B,Viotti Castro Luca Jose,Recurvo Escuela 80 (R E80),1,247,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,9,9,7,9,10,7,9,9,7,9,10,7,9
+17B,Viotti Castro Luca Jose,Recurvo Escuela 80 (R E80),2,226,9,6,8,9,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
+17C,Peralta Marilangel Del Valle,Recurvo Escuela 80 (R E80),1,248,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
+17C,Peralta Marilangel Del Valle,Recurvo Escuela 80 (R E80),2,245,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,10,7,9,9,7,9,10,7,9
+17D,Vignolo Dante Valentino,Recurvo Escuela 80 (R E80),1,236,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,9,6,8,8,6,8
+17D,Vignolo Dante Valentino,Recurvo Escuela 80 (R E80),2,228,9,7,8,9,7,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
+18A,Farias Emanuel Alejandro,Recurvo Escuela 80 (R E80),1,207,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,5,7,8,5,7,8,5,7
+18A,Farias Emanuel Alejandro,Recurvo Escuela 80 (R E80),2,223,8,6,7,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
+18B,Vilkelis Andrea,Recurvo Escuela 80 (R E80),1,221,8,6,7,8,6,7,8,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
+18B,Vilkelis Andrea,Recurvo Escuela 80 (R E80),2,243,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,9,10,7,9
+18C,Murillo Guillermo,Recurvo Escuela 80 (R E80),1,219,8,6,7,8,6,7,8,6,7,8,6,7,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
+18C,Murillo Guillermo,Recurvo Escuela 80 (R E80),2,230,9,7,8,9,7,8,9,7,8,9,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
+18D,Panero Valentina,Recurvo Escuela 80 (R E80),1,196,8,5,7,8,5,7,7,5,7,8,5,7,7,5,7,8,5,7,7,5,7,8,5,7,7,5,7,8,5,7
+18D,Panero Valentina,Recurvo Escuela 80 (R E80),2,210,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,5,8
+19A,Quiroga Valentin Fabian,Recurvo Sub 18 Escuela 80 (R U18E80),1,243,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,9,10,7,9
+19A,Quiroga Valentin Fabian,Recurvo Sub 18 Escuela 80 (R U18E80),2,223,8,6,7,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
+19B,Rocco Marianela,Recurvo Sub 15 Escuela 80 (R U15E80),1,186,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,7,8,5,7,7,5,7,8,5,7
+19B,Rocco Marianela,Recurvo Sub 15 Escuela 80 (R U15E80),2,202,8,6,7,8,6,7,8,6,7,8,6,7,8,5,7,8,5,7,7,5,7,8,5,7,7,5,7,8,5,7
+19C,Simonelli Yanel Paola,Recurvo Sub 15 Escuela 80 (R U15E80),1,220,8,6,7,8,6,7,8,6,7,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
+19C,Simonelli Yanel Paola,Recurvo Sub 15 Escuela 80 (R U15E80),2,213,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,9,6,8,8,6,8
+20A,Gonzalez Laura Cecilia,Raso Escuela 80 (B E80),1,242,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,10,7,9
+20A,Gonzalez Laura Cecilia,Raso Escuela 80 (B E80),2,231,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
+20B,Ranallo Maria Daniela,Raso Escuela 80 (B E80),1,232,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,9,6,8,9,6,8,8,6,8,9,6,8,8,6,8
+20B,Ranallo Maria Daniela,Raso Escuela 80 (B E80),2,234,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,8,6,8,9,6,8,8,6,8
+20C,Asencio Felipe Manuel,Raso Escuela 80 (B E80),1,243,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,9,10,7,9
+20C,Asencio Felipe Manuel,Raso Escuela 80 (B E80),2,239,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8
+20D,Caamaño Emilio,Raso Escuela 80 (B E80),1,206,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,5,7,7,5,7,8,5,7
+20D,Caamaño Emilio,Raso Escuela 80 (B E80),2,216,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,9,6,8,8,6,8,9,6,8,8,6,8
+21A,Benitez Ayrton,Raso Escuela 80 (B E80),1,240,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8
+21A,Benitez Ayrton,Raso Escuela 80 (B E80),2,231,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
+21B,Zamora Juan Pablo,Raso Escuela 80 (B E80),1,180,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6
+21B,Zamora Juan Pablo,Raso Escuela 80 (B E80),2,166,7,4,6,7,4,6,7,4,6,6,4,6,7,4,6,6,4,6,7,4,6,6,4,6,7,4,6,6,4,6
+21C,Córdoba Natalia Noelia,Raso Escuela 80 (B E80),1,195,7,5,7,8,5,7,7,5,7,8,5,7,7,5,7,8,5,7,7,5,7,8,5,7,7,5,7,8,5,7
+21C,Córdoba Natalia Noelia,Raso Escuela 80 (B E80),2,214,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,8,9,6,8,8,6,8
+21D,Remi Sandra Loreley,Raso Escuela 80 (B E80),1,231,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
+21D,Remi Sandra Loreley,Raso Escuela 80 (B E80),2,217,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
+22A,Schiozzi Marcelo Ariel,Raso Escuela 80 (B E80),1,250,9,7,8,9,7,8,9,7,8,9,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
+22A,Schiozzi Marcelo Ariel,Raso Escuela 80 (B E80),2,247,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,9,9,7,9,10,7,9,9,7,9,10,7,9
+22B,Gribaudo Andrea,Raso Escuela 80 (B E80),1,240,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8
+22B,Gribaudo Andrea,Raso Escuela 80 (B E80),2,241,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,9
+22C,Castelli Federico,Raso Sub 18 Escuela 80 (B U18E80),1,217,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
+22C,Castelli Federico,Raso Sub 18 Escuela 80 (B U18E80),2,220,8,6,7,8,6,7,8,6,7,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
+23A,Aldazoro Abigail,Tradicional Escuela 80 (T E80),1,175,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,4,6,7,4,6,7,4,6,6,4,6
+23A,Aldazoro Abigail,Tradicional Escuela 80 (T E80),2,202,8,6,7,8,6,7,8,6,7,8,6,7,8,5,7,8,5,7,7,5,7,8,5,7,7,5,7,8,5,7
+23B,Gaido Mateo Agustin,Raso Sub 15 Escuela 80 (B U15E80),1,233,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,9,6,8,8,6,8,9,6,8,8,6,8
+23B,Gaido Mateo Agustin,Raso Sub 15 Escuela 80 (B U15E80),2,256,10,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
+24A,Wendler Natasha,Recurvo Sub 13 Infantil 15m (R U13I15),1,258,10,8,9,10,7,9,10,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
+24A,Wendler Natasha,Recurvo Sub 13 Infantil 15m (R U13I15),2,261,10,8,9,10,8,9,10,8,9,10,7,9,10,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
+24B,Bicego Emma Bela,Raso Sub 13 Infantil 15m (B U13I15),1,235,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,9,6,8,9,6,8,8,6,8
+24B,Bicego Emma Bela,Raso Sub 13 Infantil 15m (B U13I15),2,220,8,6,7,8,6,7,8,6,7,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
+25A,Leiva Santiago Ismael,Raso Sub 13 Infantil 10m (B U13I10),1,220,8,6,7,8,6,7,8,6,7,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
+25A,Leiva Santiago Ismael,Raso Sub 13 Infantil 10m (B U13I10),2,225,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
+25B,Rocco Lucila,Raso Sub 13 Infantil 10m (B U13I10),1,203,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,5,7,7,5,7,8,5,7,7,5,7,8,5,7
+25B,Rocco Lucila,Raso Sub 13 Infantil 10m (B U13I10),2,213,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,9,6,8,8,6,8
+25C,Vera Benicio Isaias,Raso Sub 13 Infantil 10m (B U13I10),1,203,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,5,7,7,5,7,8,5,7,7,5,7,8,5,7
+25C,Vera Benicio Isaias,Raso Sub 13 Infantil 10m (B U13I10),2,145,6,4,5,6,4,5,6,4,5,6,4,5,6,4,5,6,4,5,6,3,5,6,3,5,5,3,5,6,3,5
+</file>
+
 <file path="docs/index.html">
 <!DOCTYPE html>
 <html lang="es">
@@ -2304,24 +2474,21 @@ if __name__ == "__main__":
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Agente 1: Clasificador y Segmentador de Planillas de Tiro con Arco.
+🎯 Agente 1: Clasificador y Segmentador Semántico y Geométrico Híbrido (Tiro con Arco).
 
-Soporta:
-- Clasificatoria: 1, 2 (lado a lado o arriba/abajo) o 4 arqueros.
-- Eliminatoria:   2 arqueros (lado a lado).
-- Hoja de información / portada / carátula: página completa marcada como "info".
-- Entrada PDF multipágina con páginas de tipos MIXTOS.
-
-Detección (de más fiable a menos):
-1. Override manual (viene de la UI).
-2. Nombre de archivo.
-3. Análisis visual con OpenCV:
-   - Conteo de líneas horizontales/verticales.
-   - Densidad de tinta.
-   - Conteo de filas dentro de una celda → distingue clasificación (10) de eliminatoria (5).
+Responsabilidades:
+1. Procesar archivos de entrada (PDF multipágina o Imagen PNG/JPG/JPEG).
+2. Renderizar páginas de PDF a imágenes ordenadas usando pypdfium2.
+3. Extraer texto vectorial del PDF y texto OCR con pytesseract.
+4. Inspeccionar la presencia de grillas físicas mediante morfología OpenCV (líneas de tabla).
+5. Clasificar el tipo de juego ('clasificacion', 'eliminatoria' o 'sin_modo') y layout ('4_arqueros', '2_arqueros', '1_arquero', 'portada').
+6. Generar los recortes físicos con solape inteligente en disco.
+7. Emitir un manifiesto JSON estructurado con la cola de trabajo para el Agente 2.
 """
 
 import os
+import re
+import json
 import tempfile
 from PIL import Image
 import numpy as np
@@ -2333,224 +2500,122 @@ try:
 except ImportError:
     PDF_SUPPORT = False
 
+try:
+    import pytesseract
+    OCR_SUPPORT = True
+except ImportError:
+    OCR_SUPPORT = False
+
 
 class AgenteClasificadorSegmentador:
     def __init__(self, output_dir=None):
         self.output_dir = output_dir or tempfile.mkdtemp(prefix="archery_agent1_")
-        os.makedirs(self.output_dir, exist_ok=True)
+        if not os.path.exists(self.output_dir):
+            os.makedirs(self.output_dir, exist_ok=True)
 
-    # ------------------------------------------------------------------ #
-    # UTILIDADES DE ANÁLISIS
-    # ------------------------------------------------------------------ #
-    @staticmethod
-    def _contar_picos(proyeccion_1d, umbral):
+    def extraer_texto_completo(self, ruta_imagen, pdf_page=None):
         """
-        Cuenta "picos" en una proyección 1D agrupando valores contiguos
-        que superan el umbral. Un pico = una línea detectada.
+        Extrae tanto texto vectorial (si proviene de PDF) como texto OCR (pytesseract).
         """
-        en_pico = (proyeccion_1d > umbral).astype(int)
-        if en_pico.sum() == 0:
-            return 0
-        cambios = np.diff(en_pico)
-        n_inicios = int(np.sum(cambios == 1))
-        if en_pico[0] == 1:
-            n_inicios += 1
-        return n_inicios
+        texto_vectorial = ""
+        texto_ocr = ""
 
-    def _analizar_estructura(self, img_np):
+        if pdf_page is not None:
+            try:
+                textpage = pdf_page.get_textpage()
+                texto_vectorial = textpage.get_text_range() or ""
+            except Exception:
+                texto_vectorial = ""
+
+        if OCR_SUPPORT and os.path.exists(ruta_imagen):
+            try:
+                img_pil = Image.open(ruta_imagen)
+                texto_ocr = pytesseract.image_to_string(img_pil, lang="spa+eng")
+            except Exception:
+                try:
+                    img_pil = Image.open(ruta_imagen)
+                    texto_ocr = pytesseract.image_to_string(img_pil)
+                except Exception:
+                    texto_ocr = ""
+
+        return (texto_vectorial + " " + texto_ocr).lower()
+
+    def analizar_layout(self, ruta_imagen, pdf_page=None, tipo_juego_manual=None):
         """
-        Analiza la estructura de la página con conteos de líneas y densidad.
-
-        Returns dict con:
-            n_h, n_v: cantidad de líneas horizontales/verticales largas
-            densidad: fracción de tinta en el cuerpo (0-1)
-            lines_h, lines_v: máscaras de líneas (para cortes)
-            x_div, y_div: coordenadas de las divisorias (si existen)
+        Analiza el documento mediante un enfoque híbrido (Texto semántico + Visión OpenCV):
+        - tipo_juego: 'clasificacion', 'eliminatoria' o 'sin_modo'
+        - layout: '4_arqueros', '2_arqueros', '1_arquero' o 'portada'
+        - activos: slots posicionales ['Pos_A'..'Pos_D'] | ['Puesto_1', 'Puesto_2'] | ['Individual'] | ['Portada']
         """
-        gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
-        h, w = gray.shape
+        filename = os.path.basename(ruta_imagen).lower()
 
-        _, thresh = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY_INV)
-
-        # Líneas horizontales largas (≥30% del ancho)
-        kernel_h = cv2.getStructuringElement(
-            cv2.MORPH_RECT, (max(20, int(w * 0.30)), 1)
-        )
-        lines_h = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel_h)
-
-        # Líneas verticales largas (≥20% del alto)
-        kernel_v = cv2.getStructuringElement(
-            cv2.MORPH_RECT, (1, max(20, int(h * 0.20)))
-        )
-        lines_v = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel_v)
-
-        row_sums_h = np.sum(lines_h, axis=1).astype(float)
-        col_sums_v = np.sum(lines_v, axis=0).astype(float)
-
-        n_h = self._contar_picos(row_sums_h, w * 0.20)
-        n_v = self._contar_picos(col_sums_v, h * 0.15)
-
-        # Densidad de tinta en el cuerpo (sin márgenes)
-        cuerpo = thresh[int(h * 0.10):int(h * 0.90), int(w * 0.05):int(w * 0.95)]
-        densidad = float(np.mean(cuerpo)) / 255.0
-
-        # Coordenadas de divisorias (para corte posterior)
-        x_div = None
-        z_ini, z_fin = int(w * 0.30), int(w * 0.70)
-        if z_fin > z_ini:
-            sub = col_sums_v[z_ini:z_fin]
-            if len(sub) > 0 and sub.max() > 0.5 * h:
-                cand = z_ini + int(np.argmax(sub))
-                if int(w * 0.15) < cand < int(w * 0.85):
-                    x_div = cand
-
-        y_div = None
-        z_ini, z_fin = int(h * 0.30), int(h * 0.70)
-        if z_fin > z_ini:
-            sub = row_sums_h[z_ini:z_fin]
-            if len(sub) > 0 and sub.max() > 0.7 * w:
-                cand = z_ini + int(np.argmax(sub))
-                if int(h * 0.15) < cand < int(h * 0.85):
-                    y_div = cand
-
-        return {
-            "n_h": n_h,
-            "n_v": n_v,
-            "densidad": densidad,
-            "lines_h": lines_h,
-            "lines_v": lines_v,
-            "x_div": x_div,
-            "y_div": y_div,
-        }
-
-    def _contar_filas_celda(self, img_np, x_ini, y_ini, x_fin, y_fin):
-        """
-        Cuenta las líneas horizontales internas en una celda típica.
-        Sirve para distinguir:
-          - clasificación: ~11-13 filas
-          - eliminatoria:   ~6-8 filas
-        """
-        if x_fin <= x_ini or y_fin <= y_ini:
-            return 0
-        region = img_np[y_ini:y_fin, x_ini:x_fin]
-        gray = cv2.cvtColor(region, cv2.COLOR_RGB2GRAY)
-        h_reg, w_reg = gray.shape
-
-        _, thresh = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY_INV)
-        kernel_h = cv2.getStructuringElement(
-            cv2.MORPH_RECT, (max(15, int(w_reg * 0.50)), 1)
-        )
-        lines_h = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel_h)
-        row_sums = np.sum(lines_h, axis=1).astype(float)
-        return self._contar_picos(row_sums, w_reg * 0.20)
-
-    # ------------------------------------------------------------------ #
-    # DECISIÓN DE LAYOUT
-    # ------------------------------------------------------------------ #
-    def _layout_desde_manual(self, tipo_manual, diag):
-        mapa = {
-            "info": ("info", "portada", ["Portada"]),
-            "eliminatoria_2": ("eliminatoria", "2_arqueros_lado_a_lado", ["Puesto_1", "Puesto_2"]),
-            "clasificacion_1": ("clasificacion", "1_arquero", ["Individual"]),
-            "clasificacion_2_lado": ("clasificacion", "2_arqueros_lado_a_lado", ["Pos_A", "Pos_B"]),
-            "clasificacion_2_arriba": ("clasificacion", "2_arqueros_arriba_abajo", ["Pos_A", "Pos_B"]),
-            "clasificacion_4": ("clasificacion", "4_arqueros", ["Pos_A", "Pos_B", "Pos_C", "Pos_D"]),
-        }
-        return mapa.get(tipo_manual, mapa["clasificacion_1"])
-
-    def analizar_layout(self, ruta_imagen, original_filename=None, tipo_juego_manual=None, page_override=None):
-        pil_img = Image.open(ruta_imagen)
-        img_np = np.array(pil_img.convert("RGB"))
-        h, w = img_np.shape[:2]
-
-        diag = self._analizar_estructura(img_np)
-
-        # 0. Override de PÁGINA tiene prioridad absoluta
-        if page_override:
-            tipo_pagina, layout, posiciones = self._layout_desde_manual(page_override, diag)
-            diag["metodo_deteccion"] = "override_pagina"
-            return tipo_pagina, layout, posiciones, diag
-
-        filename = (original_filename or os.path.basename(ruta_imagen)).lower()
-
-        # 1. Override global
-        if tipo_juego_manual:
-            tipo_pagina, layout, posiciones = self._layout_desde_manual(tipo_juego_manual, diag)
-            diag["metodo_deteccion"] = "override_global"
-            return tipo_pagina, layout, posiciones, diag
-
-        # 2. Nombre de archivo
-        if any(p in filename for p in ["portada", "caratula", "info"]):
-            diag["metodo_deteccion"] = "nombre_archivo"
-            return "info", "portada", ["Portada"], diag
-
-        if any(p in filename for p in ["eliminac", "duelo", "enfrentamiento"]):
-            diag["metodo_deteccion"] = "nombre_archivo"
-            return "eliminatoria", "2_arqueros_lado_a_lado", ["Puesto_1", "Puesto_2"], diag
-
-        if any(p in filename for p in ["4-arqueros", "cuadrantes"]):
-            diag["metodo_deteccion"] = "nombre_archivo"
-            return "clasificacion", "4_arqueros", ["Pos_A", "Pos_B", "Pos_C", "Pos_D"], diag
-
-        if any(p in filename for p in ["individual", "1a-", "crop_"]):
-            diag["metodo_deteccion"] = "nombre_archivo"
-            return "clasificacion", "1_arquero", ["Individual"], diag
-
-        # 3. Análisis visual
-        diag["metodo_deteccion"] = "visual"
-
-        # 3.1. Página con poco contenido → info
-        if diag["n_h"] < 5 or diag["densidad"] < 0.025:
-            diag["razon"] = f"poco_contenido(n_h={diag['n_h']}, dens={diag['densidad']:.3f})"
-            return "info", "portada", ["Portada"], diag
-
-        # 3.2. Grid 2x2 completo (división vertical Y horizontal fuerte) → 4_arqueros
-        if diag["x_div"] is not None and diag["y_div"] is not None and diag["n_h"] >= 15:
-            diag["razon"] = f"grid_2x2(n_h={diag['n_h']}, n_v={diag['n_v']})"
-            return "clasificacion", "4_arqueros", ["Pos_A", "Pos_B", "Pos_C", "Pos_D"], diag
-
-        # 3.3. Solo división vertical fuerte → 2 arqueros lado a lado
-        if diag["x_div"] is not None and diag["n_h"] >= 6:
-            # Distinguir clasificación (10 series) vs eliminatoria (5 sets)
-            x_ini = int(w * 0.05)
-            x_fin = diag["x_div"]
-            y_ini = int(h * 0.15)
-            y_fin = int(h * 0.85)
-            n_filas = self._contar_filas_celda(img_np, x_ini, y_ini, x_fin, y_fin)
-
-            if n_filas <= 8:
-                diag["razon"] = f"2_cols_eliminatoria(filas={n_filas})"
-                return "eliminatoria", "2_arqueros_lado_a_lado", ["Puesto_1", "Puesto_2"], diag
+        # 1. Override manual si el usuario lo especificó
+        if tipo_juego_manual in ["clasificacion", "eliminatoria"]:
+            if tipo_juego_manual == "eliminatoria":
+                return "eliminatoria", "2_arqueros", ["Puesto_1", "Puesto_2"]
             else:
-                diag["razon"] = f"2_cols_clasificacion(filas={n_filas})"
-                return "clasificacion", "2_arqueros_lado_a_lado", ["Pos_A", "Pos_B"], diag
+                return "clasificacion", "4_arqueros", ["Pos_A", "Pos_B", "Pos_C", "Pos_D"]
 
-        # 3.4. Solo división horizontal → 2 arqueros arriba/abajo
-        if diag["y_div"] is not None and diag["n_h"] >= 10:
-            diag["razon"] = f"2_filas(n_h={diag['n_h']})"
-            return "clasificacion", "2_arqueros_arriba_abajo", ["Pos_A", "Pos_B"], diag
+        # 2. Abrir imagen y calcular aspecto
+        img = Image.open(ruta_imagen)
+        w, h = img.size
+        aspect = w / h
 
-        # 3.5. Muchas líneas sin estructura clara → 4_arqueros por defecto
-        if diag["n_h"] >= 15:
-            diag["razon"] = f"muchas_lineas(n_h={diag['n_h']})"
-            return "clasificacion", "4_arqueros", ["Pos_A", "Pos_B", "Pos_C", "Pos_D"], diag
+        # 3. Extraer texto semántico combinando PDF vectorial + OCR
+        texto = self.extraer_texto_completo(ruta_imagen, pdf_page=pdf_page)
 
-        # 3.6. Default: 1 arquero
-        diag["razon"] = f"default(n_h={diag['n_h']}, n_v={diag['n_v']})"
-        return "clasificacion", "1_arquero", ["Individual"], diag
+        # 4. Análisis por Visión de Computadora (Morfología de líneas de tabla)
+        img_np = np.array(img.convert('RGB'))
+        gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
+        _, thresh = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY_INV)
 
-    # ------------------------------------------------------------------ #
-    # PROCESAMIENTO DEL DOCUMENTO
-    # ------------------------------------------------------------------ #
-    def procesar_documento(self, ruta_archivo, tipo_juego_manual=None, page_overrides=None):
+        kernel_h = cv2.getStructuringElement(cv2.MORPH_RECT, (max(10, w // 20), 1))
+        lines_h = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel_h)
+
+        top_h_density = float(np.mean(lines_h[0:int(h * 0.45), :]))
+        bot_h_density = float(np.mean(lines_h[int(h * 0.45):int(h * 0.95), :]))
+        total_h_density = float(np.mean(lines_h))
+
+        # 5. Detección de Eliminatorias
+        kw_eliminatoria = ["total set points", "set points", "ganador", "s.o.", "shoot off", "shoot-off", "contencion", "duelo"]
+        has_elim_kw = any(kw in texto for kw in kw_eliminatoria)
+        has_posicion_num = bool(re.search(r'posici[oó]n\s*\d+', texto))
+        is_filename_elim = any(k in filename for k in ["eliminacion", "duelo", "2-arqueros", "2_arqueros"])
+        is_landscape_duel = (aspect > 1.25) and (total_h_density > 1.0)
+
+        if has_elim_kw or has_posicion_num or is_filename_elim or is_landscape_duel:
+            return "eliminatoria", "2_arqueros", ["Puesto_1", "Puesto_2"]
+
+        # 6. Detección de Clasificación vs Portada/Info
+        has_scorecard_text = any(k in texto for k in ["10s", "9s", "series", "tot.", "sum", "ronda #", "hoja de anotac", "arquero", "atleta"])
+        dianas_found = set(re.findall(r'\b\d+[a-d]\b', texto))
+        is_filename_1archer = any(k in filename for k in ["1a-", "1b-", "1c-", "1d-", "individual"])
+        is_filename_4archers = any(k in filename for k in ["4-arqueros", "4_arqueros"])
+
+        has_table_grid = (top_h_density > 1.2 or bot_h_density > 1.2 or has_scorecard_text or len(dianas_found) > 0)
+
+        if not has_table_grid:
+            return "sin_modo", "portada", ["Portada"]
+
+        # 7. Discriminar entre 4 Arqueros y 1 Arquero
+        if is_filename_1archer:
+            return "clasificacion", "1_arquero", ["Individual"]
+
+        if is_filename_4archers or (top_h_density > 1.2 and bot_h_density > 1.2) or len(dianas_found) >= 3:
+            return "clasificacion", "4_arqueros", ["Pos_A", "Pos_B", "Pos_C", "Pos_D"]
+        else:
+            return "clasificacion", "1_arquero", ["Individual"]
+
+    def procesar_documento(self, ruta_archivo, tipo_juego_manual=None):
+        """
+        Procesa el archivo de entrada (PDF o Imagen) y retorna un
+        manifiesto JSON con las imágenes recortadas listas para el Agente 2.
+        """
         if not os.path.exists(ruta_archivo):
             raise FileNotFoundError(f"El archivo '{ruta_archivo}' no existe.")
 
-        page_overrides = page_overrides or {}
-
-        original_filename = os.path.basename(ruta_archivo)
-        es_pdf = ruta_archivo.lower().endswith(".pdf")
-        paginas_imagenes = []
+        es_pdf = ruta_archivo.lower().endswith('.pdf')
+        paginas_datos = []
 
         if es_pdf:
             if not PDF_SUPPORT:
@@ -2561,106 +2626,55 @@ class AgenteClasificadorSegmentador:
                 pil_img = bitmap.to_pil()
                 img_path = os.path.join(self.output_dir, f"pagina_{i+1}.png")
                 pil_img.save(img_path)
-                paginas_imagenes.append((i + 1, img_path))
+                paginas_datos.append((i + 1, img_path, page))
         else:
-            paginas_imagenes.append((1, ruta_archivo))
+            paginas_datos.append((1, ruta_archivo, None))
 
         manifiesto = {
-            "archivo_origen": original_filename,
-            "total_paginas": len(paginas_imagenes),
-            "tipos_pagina": [],
-            "entrada_mixta": False,
-            "tareas_agente2": [],
+            "archivo_origen": os.path.basename(ruta_archivo),
+            "total_paginas": len(paginas_datos),
+            "tareas_agente2": []
         }
 
-        for num_pag, img_path in paginas_imagenes:
-            page_ovr = page_overrides.get(num_pag)
-
-            tipo_pagina, layout, posiciones_activas, diag = self.analizar_layout(
-                img_path,
-                original_filename=original_filename,
-                tipo_juego_manual=tipo_juego_manual,
-                page_override=page_ovr,
+        for num_pag, img_path, pdf_page in paginas_datos:
+            tipo_juego, layout, activos = self.analizar_layout(
+                img_path, pdf_page=pdf_page, tipo_juego_manual=tipo_juego_manual
             )
-            
-            manifiesto["tipos_pagina"].append({
-                "numero": num_pag,
-                "tipo": tipo_pagina,
-                "layout": layout,
-                "metodo_deteccion": diag.get("metodo_deteccion", "desconocido"),
-                "razon": diag.get("razon", ""),
-                "n_h": diag.get("n_h", 0),
-                "n_v": diag.get("n_v", 0),
-                "densidad": round(diag.get("densidad", 0), 4),
-            })
-
-            # Página de info/portada
-            if layout == "portada":
-                manifiesto["tareas_agente2"].append({
-                    "pagina": num_pag,
-                    "posicion_slot": "Pagina_Info",
-                    "tipo_juego": "info",
-                    "layout": "portada",
-                    "ruta_recorte": img_path,
-                })
-                continue
-
             img = Image.open(img_path)
             w, h = img.size
-            ov_x = int(w * 0.08)
-            ov_y = int(h * 0.08)
 
+            # Coordenadas de recortes por layout
             if layout == "4_arqueros":
-                x_div = diag["x_div"] or (w // 2)
-                y_div = diag["y_div"] or (h // 2)
                 cuadrantes_coords = {
-                    "Pos_A": (0, 0, min(x_div + ov_x, w), min(y_div + ov_y, h)),
-                    "Pos_B": (max(x_div - ov_x, 0), 0, w, min(y_div + ov_y, h)),
-                    "Pos_C": (0, max(y_div - ov_y, 0), min(x_div + ov_x, w), h),
-                    "Pos_D": (max(x_div - ov_x, 0), max(y_div - ov_y, 0), w, h),
+                    "Pos_A": (0, 0, w // 2, h // 2),
+                    "Pos_B": (w // 2, 0, w, h // 2),
+                    "Pos_C": (0, int(h * 0.38), w // 2, h),
+                    "Pos_D": (int(w * 0.48), int(h * 0.38), w, h)
                 }
-            elif layout == "2_arqueros_lado_a_lado":
-                x_div = diag["x_div"] or (w // 2)
-                if tipo_pagina == "eliminatoria":
-                    cuadrantes_coords = {
-                        "Puesto_1": (0, 0, min(x_div + ov_x, w), h),
-                        "Puesto_2": (max(x_div - ov_x, 0), 0, w, h),
-                    }
-                else:
-                    cuadrantes_coords = {
-                        "Pos_A": (0, 0, min(x_div + ov_x, w), h),
-                        "Pos_B": (max(x_div - ov_x, 0), 0, w, h),
-                    }
-            elif layout == "2_arqueros_arriba_abajo":
-                y_div = diag["y_div"] or (h // 2)
+            elif layout == "2_arqueros":
                 cuadrantes_coords = {
-                    "Pos_A": (0, 0, w, min(y_div + ov_y, h)),
-                    "Pos_B": (0, max(y_div - ov_y, 0), w, h),
+                    "Puesto_1": (0, 0, int(w * 0.52), h),
+                    "Puesto_2": (int(w * 0.48), 0, w, h)
                 }
-            else:  # 1_arquero
-                cuadrantes_coords = {"Individual": (0, 0, w, h)}
+            else:
+                cuadrantes_coords = {
+                    "Individual" if layout == "1_arquero" else "Portada": (0, 0, w, h)
+                }
 
-            for pos_id in posiciones_activas:
-                if pos_id not in cuadrantes_coords:
-                    continue
-                coords = cuadrantes_coords[pos_id]
+            for target_id in activos:
+                coords = cuadrantes_coords.get(target_id, (0, 0, w, h))
                 crop_img = img.crop(coords)
-                crop_filename = f"pag_{num_pag}_crop_{pos_id}.png"
+                crop_filename = f"pag_{num_pag}_crop_{target_id}.png"
                 crop_path = os.path.join(self.output_dir, crop_filename)
                 crop_img.save(crop_path, "PNG")
 
                 manifiesto["tareas_agente2"].append({
                     "pagina": num_pag,
-                    "posicion_slot": pos_id,
-                    "tipo_juego": tipo_pagina,
+                    "target_id": target_id,
+                    "tipo_juego": tipo_juego,
                     "layout": layout,
-                    "ruta_recorte": crop_path,
-                    "x_divisoria_detectada": diag.get("x_div"),
-                    "y_divisoria_detectada": diag.get("y_div"),
+                    "ruta_recorte": crop_path
                 })
-
-        tipos_unicos = {p["tipo"] for p in manifiesto["tipos_pagina"]}
-        manifiesto["entrada_mixta"] = len(tipos_unicos) > 1
 
         return manifiesto
 </file>
@@ -2669,243 +2683,98 @@ class AgenteClasificadorSegmentador:
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Orquestador Web - Agente 1 con corrección manual por página.
+🎯 Servidor Principal y Orquestador Web - Sistema de Tiro con Arco (Multi-Agente)
+
+Lanza la interfaz en local en http://localhost:7860.
+Ejecuta el Agente 1 (Clasificador y Segmentador por páginas) con soporte multi-módulo.
 """
 
 import os
+import sys
 import json
 import gradio as gr
-import pandas as pd
+from PIL import Image
 
-from .agente_1_clasificador_segmentador import AgenteClasificadorSegmentador
+# Importación robusta compatible con estructura de paquete tiro_arco y ejecución directa
+try:
+    from .agente_1_clasificador_segmentador import AgenteClasificadorSegmentador
+except ImportError:
+    try:
+        from tiro_arco.agente_1_clasificador_segmentador import AgenteClasificadorSegmentador
+    except ImportError:
+        from agente_1_clasificador_segmentador import AgenteClasificadorSegmentador
 
 agente_1 = AgenteClasificadorSegmentador()
 
-# Mapping string de UI → tipo_manual del agente
-OVERRIDE_MAP = {
-    "info": "info",
-    "eliminatoria — 2 arqueros": "eliminatoria_2",
-    "clasificación — 1 arquero": "clasificacion_1",
-    "clasificación — 2 arqueros (lado a lado)": "clasificacion_2_lado",
-    "clasificación — 2 arqueros (arriba/abajo)": "clasificacion_2_arriba",
-    "clasificación — 4 arqueros": "clasificacion_4",
-}
-
-# Opciones que el usuario puede escribir en la columna Override
-OVERRIDE_CHOICES = list(OVERRIDE_MAP.keys())
-
-
-def tipo_global_map(val):
-    if "Automático" in val:
-        return None
-    if "Información" in val:
-        return "info"
-    if "Eliminatoria" in val:
-        return "eliminatoria_2"
-    if "Clasificación — 1" in val:
-        return "clasificacion_1"
-    if "Clasificación — 2" in val and "lado" in val:
-        return "clasificacion_2_lado"
-    if "Clasificación — 2" in val and "arriba" in val:
-        return "clasificacion_2_arriba"
-    if "Clasificación — 4" in val:
-        return "clasificacion_4"
+def tipo_juego_manual_map(val):
+    if "Clasificación" in val:
+        return "clasificacion"
+    elif "Eliminatoria" in val:
+        return "eliminatoria"
     return None
 
-
-def _formatear_resumen(manifiesto):
-    r = "### 📊 Diagnóstico del Agente 1\n\n"
-    r += f"- **Archivo:** `{manifiesto['archivo_origen']}`\n"
-    r += f"- **Páginas:** `{manifiesto['total_paginas']}`\n"
-    r += f"- **Recortes:** `{len(manifiesto['tareas_agente2'])}`\n"
-    r += f"- **Entrada mixta:** `{'Sí' if manifiesto['entrada_mixta'] else 'No'}`\n\n"
-    r += "#### 📄 Detalle por página\n\n"
-    for p in manifiesto["tipos_pagina"]:
-        r += (f"- **Pág. {p['numero']}:** `{p['tipo']}/{p['layout']}` "
-              f"({p['metodo_deteccion']})\n")
-    return r
-
-
-def _formatear_galeria(manifiesto):
-    gal = []
-    for t in manifiesto["tareas_agente2"]:
-        p = t["ruta_recorte"]
-        if os.path.exists(p):
-            label = f"Pág {t['pagina']} - {t['posicion_slot']} ({t['tipo_juego']})"
-            gal.append((p, label))
-    return gal
-
-
-def _tabla_paginas(manifiesto):
-    """Construye la tabla editable con 3 columnas."""
-    rows = []
-    for p in manifiesto["tipos_pagina"]:
-        # Etiqueta legible del layout detectado
-        etiqueta_detectada = {
-            "portada": "info",
-            "eliminatoria_2": "eliminatoria — 2 arqueros",
-            "1_arquero": "clasificación — 1 arquero",
-            "2_arqueros_lado_a_lado": "clasificación — 2 arqueros (lado a lado)",
-            "2_arqueros_arriba_abajo": "clasificación — 2 arqueros (arriba/abajo)",
-            "4_arqueros": "clasificación — 4 arqueros",
-        }.get(p["layout"], "clasificación — 1 arquero")
-        # La columna Override arranca igual a lo detectado
-        rows.append([p["numero"], etiqueta_detectada, etiqueta_detectada])
-    return pd.DataFrame(rows, columns=["Página", "Detectado", "Override"])
-
-
-def procesar_inicial(file_obj, tipo_global, state):
+def procesar_con_agente_1(file_obj, tipo_juego_override):
     if file_obj is None:
-        return ("⚠️ Subí un archivo para empezar.", [], "{}", gr.update(), state or {})
+        return "⚠️ Por favor, selecciona un archivo (PDF o Imagen).", [], "{}"
 
-    state = state or {}
-    state["file_path"] = file_obj.name
-    state["tipo_global_str"] = tipo_global
-    tipo_manual = tipo_global_map(tipo_global)
-    state["tipo_global_manual"] = tipo_manual
+    file_path = file_obj.name
+    tipo_manual = None if tipo_juego_override == "Automático" else tipo_juego_manual_map(tipo_juego_override)
 
     try:
-        manifiesto = agente_1.procesar_documento(
-            file_obj.name, tipo_juego_manual=tipo_manual
-        )
-        state["manifiesto"] = manifiesto
+        manifiesto = agente_1.procesar_documento(file_path, tipo_juego_manual=tipo_manual)
+        
+        # Preparar resumen de diagnóstico
+        resumen_md = f"### 📊 Diagnóstico del Agente 1\n"
+        resumen_md += f"- **Archivo Origen:** `{manifiesto['archivo_origen']}`\n"
+        resumen_md += f"- **Total de Páginas Renderizadas:** `{manifiesto['total_paginas']}`\n"
+        resumen_md += f"- **Recortes Generados (Tareas Agente 2):** `{len(manifiesto['tareas_agente2'])}` \n\n"
 
-        return (
-            _formatear_resumen(manifiesto),                         # status_box
-            _formatear_galeria(manifiesto),                         # gallery_out
-            json.dumps(manifiesto, indent=2, ensure_ascii=False),   # json_out
-            _tabla_paginas(manifiesto),                             # df_paginas
-            state,                                                  # state
-        )
+        # Cargar imágenes de vista previa de los recortes
+        gallery_images = []
+        for tarea in manifiesto["tareas_agente2"]:
+            crop_path = tarea["ruta_recorte"]
+            if os.path.exists(crop_path):
+                label = f"Pág {tarea['pagina']} - {tarea['target_id']} ({tarea['tipo_juego'].capitalize()})"
+                gallery_images.append((crop_path, label))
+
+        json_str = json.dumps(manifiesto, indent=2, ensure_ascii=False)
+        return resumen_md, gallery_images, json_str
+
     except Exception as e:
-        return (f"❌ Error: {e}", [], "{}", gr.update(), state)
+        err_msg = f"❌ Error durante el procesamiento con Agente 1: {str(e)}"
+        return err_msg, [], "{}"
 
-
-def regenerar_con_overrides(state, df_paginas, tipo_global):
-    if not state or "file_path" not in state:
-        return ("⚠️ Primero procesá un archivo.", [], "{}", gr.update(), state)
-
-    if df_paginas is None or len(df_paginas) == 0:
-        return ("⚠️ No hay páginas para regenerar.", [], "{}", gr.update(), state)
-
-    page_overrides = {}
-    for _, row in df_paginas.iterrows():
-        try:
-            num = int(row["Página"])
-        except (ValueError, TypeError):
-            continue
-        override_txt = str(row["Override"]).strip()
-        mapped = OVERRIDE_MAP.get(override_txt)
-        if mapped:
-            page_overrides[num] = mapped
-
-    tipo_manual_global = tipo_global_map(tipo_global) if tipo_global else None
-
-    try:
-        manifiesto = agente_1.procesar_documento(
-            state["file_path"],
-            tipo_juego_manual=tipo_manual_global,
-            page_overrides=page_overrides,
-        )
-        state["manifiesto"] = manifiesto
-
-        return (
-            _formatear_resumen(manifiesto),
-            _formatear_galeria(manifiesto),
-            json.dumps(manifiesto, indent=2, ensure_ascii=False),
-            _tabla_paginas(manifiesto),
-            state,
-        )
-    except Exception as e:
-        return (f"❌ Error al regenerar: {e}", [], "{}", gr.update(), state)
-
-
-def build_ui():
+def main():
     with gr.Blocks(title="🎯 Orquestador Multi-Agente - Tiro con Arco") as demo:
-        state = gr.State(value={})
-
-        gr.Markdown("# 🎯 Sistema Multi-Agente - Tiro con Arco")
-        gr.Markdown(
-            "Subí un PDF o imagen. Si la detección falla en alguna página, "
-            "corregila en la tabla y volvé a generar."
-        )
+        gr.Markdown("# 🎯 Sistema Multi-Agente de Transcripción - Tiro con Arco")
+        gr.Markdown("Servidor principal web. Actualmente ejecuta el **Agente 1: Clasificador y Segmentador por Páginas**.")
 
         with gr.Row():
             with gr.Column(scale=1):
-                file_input = gr.File(
-                    label="Subir planilla (PDF o imagen)",
-                    file_types=[".pdf", ".png", ".jpg", ".jpeg"],
+                file_input = gr.File(label="Subir Planilla (PDF o Imagen)", file_types=[".pdf", ".png", ".jpg", ".jpeg"])
+                tipo_override = gr.Dropdown(
+                    label="Modo de Juego",
+                    choices=["Automático", "Clasificación (4 Arqueros)", "Eliminatoria (2 Arqueros / Duelos)"],
+                    value="Automático"
                 )
-                tipo_global = gr.Dropdown(
-                    label="Modo global (opcional)",
-                    choices=[
-                        "Automático (detectar por página)",
-                        "Clasificación — 1 Arquero",
-                        "Clasificación — 2 Arqueros (lado a lado)",
-                        "Clasificación — 2 Arqueros (arriba/abajo)",
-                        "Clasificación — 4 Arqueros",
-                        "Eliminatoria — 2 Arqueros",
-                        "Página de Información / Portada",
-                    ],
-                    value="Automático (detectar por página)",
-                )
-                btn_procesar = gr.Button("🚀 Procesar archivo", variant="primary")
+                btn_process = gr.Button("🚀 Ejecutar Agente 1 (Segmentar Documento)", variant="primary")
 
             with gr.Column(scale=2):
-                status_box = gr.Markdown("Esperando archivo...")
-                gallery_out = gr.Gallery(
-                    label="✂️ Recortes generados", columns=2, height=400
-                )
-                json_out = gr.Code(
-                    label="📄 Manifiesto JSON", language="json"
-                )
+                status_box = gr.Markdown(value="Esperando archivo para procesar...")
+                gallery_out = gr.Gallery(label="✂️ Recortes Generados por Agente 1", columns=2, height=350)
+                json_out = gr.Code(label="📄 Manifiesto JSON Generado (Entrada para Agente 2)", language="json")
 
-        gr.Markdown("---")
-        gr.Markdown("### ✏️ Corrección por página")
-        gr.Markdown(
-            "Valores válidos para la columna **Override**:\n\n"
-            "- `info`\n"
-            "- `eliminatoria — 2 arqueros`\n"
-            "- `clasificación — 1 arquero`\n"
-            "- `clasificación — 2 arqueros (lado a lado)`\n"
-            "- `clasificación — 2 arqueros (arriba/abajo)`\n"
-            "- `clasificación — 4 arqueros`"
+        btn_process.click(
+            fn=procesar_con_agente_1,
+            inputs=[file_input, tipo_override],
+            outputs=[status_box, gallery_out, json_out]
         )
 
-        df_paginas = gr.Dataframe(
-            headers=["Página", "Detectado", "Override"],
-            datatype=["number", "str", "str"],
-            interactive=True,
-            wrap=True,
-            label="Tabla de páginas (editá la columna Override)",
-        )
-        btn_regenerar = gr.Button(
-            "🔄 Aplicar correcciones y regenerar", variant="secondary"
-        )
-
-        # Eventos: 5 outputs, 5 valores de retorno
-        btn_procesar.click(
-            fn=procesar_inicial,
-            inputs=[file_input, tipo_global, state],
-            outputs=[status_box, gallery_out, json_out, df_paginas, state],
-        )
-        btn_regenerar.click(
-            fn=regenerar_con_overrides,
-            inputs=[state, df_paginas, tipo_global],
-            outputs=[status_box, gallery_out, json_out, df_paginas, state],
-        )
-
-    return demo
-
-
-def main():
     print("=" * 60)
-    print("🚀 Sistema Multi-Agente - Tiro con Arco")
-    print("🌍 http://localhost:7860")
+    print("🚀 Servidor Principal Multi-Agente - Tiro con Arco")
+    print("🌍 Abre tu navegador en: http://localhost:7860")
     print("=" * 60)
-    demo = build_ui()
     demo.launch(server_name="0.0.0.0", server_port=7860, share=False)
-
 
 if __name__ == "__main__":
     main()
@@ -2957,6 +2826,10 @@ def test_archivo_inexistente(tmp_out):
         agente.procesar_documento("/ruta/que/no/existe.pdf")
 </file>
 
+<file path="AGENTS.md">
+
+</file>
+
 <file path="pyproject.toml">
 [build-system]
 requires = ["setuptools>=68", "wheel"]
@@ -2999,178 +2872,26 @@ testpaths = ["tests"]
 pythonpath = ["src"]
 </file>
 
-<file path="data/processed/torneo_indoor_san_francisco_detallado.csv">
-Target,Archer,Category,Round,Total_Score,1_1,1_2,1_3,2_1,2_2,2_3,3_1,3_2,3_3,4_1,4_2,4_3,5_1,5_2,5_3,6_1,6_2,6_3,7_1,7_2,7_3,8_1,8_2,8_3,9_1,9_2,9_3,10_1,10_2,10_3
-1A,Leguiza Marcelo Gabriel,Recurvo Masculino (RM),1,254,10,9,8,9,9,7,10,9,9,10,9,7,9,8,10,10,9,9,9,9,6,10,10,9,10,7,7,10,9,7
-1A,Leguiza Marcelo Gabriel,Recurvo Masculino (RM),2,247,10,9,8,9,9,M,10,9,6,9,9,8,10,8,8,9,8,7,9,8,6,10,9,7,10,8,8,10,8,8
-1B,Romero Braian Gabriel,Recurvo Masculino (RM),1,226,9,9,8,10,8,7,9,9,7,9,9,9,8,8,8,9,9,8,8,7,M,8,8,M,9,8,7,10,8,M
-1B,Romero Braian Gabriel,Recurvo Masculino (RM),2,150,8,M,M,8,M,M,7,6,M,9,M,M,9,9,8,9,7,M,3,8,M,9,7,M,9,8,6,9,6,M
-1C,Wendler Luis Miguel,Recurvo Masculino (RM),1,248,10,9,8,9,9,7,9,8,7,10,8,8,9,9,9,10,10,9,10,9,8,9,8,8,10,9,9,9,7,6
-1C,Wendler Luis Miguel,Recurvo Masculino (RM),2,240,9,9,7,10,8,8,10,10,8,8,8,7,10,8,M,9,9,7,10,7,6,9,9,8,8,7,6,9,9,7
-1D,Delhom Matias Ezequiel,Recurvo Masculino (RM),1,269,9,7,7,9,9,7,9,9,8,9,9,9,10,9,9,10,9,8,10,9,9,9,9,6,10,10,10,10,8,8
-1D,Delhom Matias Ezequiel,Recurvo Masculino (RM),2,257,10,8,8,9,8,7,10,9,8,10,10,9,9,9,8,9,9,9,9,9,9,10,9,8,9,9,8,9,9,M
-2A,Bianchi Andreotti Pablo Esteban,Recurvo Masculino (RM),1,265,10,8,7,10,10,10,10,9,9,10,9,6,10,10,8,10,9,8,9,9,7,10,8,7,9,8,8,10,10,9
-2A,Bianchi Andreotti Pablo Esteban,Recurvo Masculino (RM),2,256,10,8,8,10,8,8,10,9,7,10,9,8,10,9,8,10,7,7,10,10,9,9,9,8,10,8,8,7,6,6
-2B,Peralta Ivana Elizabeth,Recurvo Femenino (RW),1,218,9,7,M,7,6,M,10,9,6,8,7,7,7,7,M,9,9,8,10,7,7,9,8,8,8,8,7,9,8,7
-2B,Peralta Ivana Elizabeth,Recurvo Femenino (RW),2,177,8,8,M,7,6,6,8,7,M,7,6,M,8,7,6,7,7,7,8,7,7,8,8,6,9,M,M,8,7,6
-3A,Sanchez Gonzalo Javier,Compuesto Masculino (CM),1,240,9,8,6,10,9,7,10,9,7,9,9,7,9,9,7,9,9,8,10,9,9,9,9,8,9,9,9,8,M,M
-3A,Sanchez Gonzalo Javier,Compuesto Masculino (CM),2,260,9,8,8,9,9,8,9,9,8,10,9,7,10,9,9,10,9,8,9,8,7,9,9,9,9,9,8,10,9,8
-3B,Rodriguez Eduardo Angel,Compuesto Masculino (CM),1,272,10,10,9,9,9,9,10,9,8,10,10,9,10,10,9,10,9,9,9,9,9,9,9,8,9,9,9,9,9,7
-3B,Rodriguez Eduardo Angel,Compuesto Masculino (CM),2,270,9,8,7,9,9,9,10,9,9,9,9,9,9,9,8,10,9,7,10,10,9,10,9,9,9,9,9,10,9,9
-3C,Tonoli Ettlin Pablo Ernesto Esteban,Compuesto Masculino (CM),1,286,10,9,9,10,10,9,10,10,10,9,9,9,10,10,10,10,10,9,10,9,9,10,9,9,10,10,9,10,9,9
-3C,Tonoli Ettlin Pablo Ernesto Esteban,Compuesto Masculino (CM),2,277,9,9,9,9,9,9,9,9,9,10,9,9,10,9,9,10,9,8,10,9,9,10,9,9,10,10,9,10,9,9
-4A,Filippelli Moreno Matias Nicolas,Compuesto Masculino (CM),1,274,9,9,8,10,9,9,10,9,9,9,9,8,9,9,8,10,10,9,10,10,8,10,10,8,10,9,9,10,9,9
-4A,Filippelli Moreno Matias Nicolas,Compuesto Masculino (CM),2,266,9,8,8,10,9,8,10,9,7,10,10,8,9,9,9,9,9,8,10,9,9,9,9,8,10,9,9,10,9,6
-4B,Torales Sergio Martin,Compuesto Masculino (CM),1,215,9,6,M,9,7,7,9,9,8,9,9,M,9,9,6,9,9,6,8,M,M,9,8,7,9,8,8,9,7,6
-4B,Torales Sergio Martin,Compuesto Masculino (CM),2,192,9,8,M,9,9,8,9,8,M,8,7,M,9,9,6,8,8,M,8,8,7,7,6,M,9,8,M,10,8,6
-4C,Torales Fochesatto Sofia,Compuesto Cazador A2 Femenino (CAA2 W),1,257,9,8,6,9,9,8,10,10,8,9,9,8,10,9,9,9,9,9,10,9,8,8,8,7,9,9,7,9,9,7
-4C,Torales Fochesatto Sofia,Compuesto Cazador A2 Femenino (CAA2 W),2,254,9,9,8,9,9,9,9,9,M,10,9,9,10,9,9,9,9,8,9,7,6,9,9,9,9,9,9,9,9,7
-5A,Castellanos Denis Esteban,Raso Masculino (BM),1,268,10,9,7,9,8,7,10,9,9,10,9,9,10,9,7,10,10,10,10,9,9,9,8,8,9,9,8,10,10,9
-5A,Castellanos Denis Esteban,Raso Masculino (BM),2,268,9,8,7,9,9,8,10,9,7,10,9,7,9,9,9,10,10,9,10,9,7,10,8,8,10,10,9,10,10,9
-5B,Vaca Alejandro Daniel,Raso Masculino (BM),1,215,9,6,6,10,7,6,9,6,6,8,7,6,7,6,3,10,7,7,9,8,6,9,7,7,10,6,4,9,8,6
-5B,Vaca Alejandro Daniel,Raso Masculino (BM),2,206,9,8,5,9,8,8,8,8,7,9,8,4,8,8,6,7,6,5,9,7,M,9,7,3,8,8,4,9,7,5
-5C,Urbani Victor Daniel,Raso Masculino (BM),1,241,8,8,7,8,7,5,9,8,7,10,9,8,10,7,6,9,8,7,10,8,5,9,8,7,10,9,7,10,10,8
-5C,Urbani Victor Daniel,Raso Masculino (BM),2,221,10,6,5,7,7,5,10,9,8,9,7,7,10,6,4,8,8,5,9,8,7,7,6,4,10,9,7,10,7,6
-5D,Rocco Nazareno Antonio,Raso Masculino (BM),1,214,10,4,M,10,9,4,10,8,5,8,8,8,9,7,6,7,7,4,10,7,4,8,7,7,8,8,8,9,9,5
-5D,Rocco Nazareno Antonio,Raso Masculino (BM),2,221,10,7,6,9,7,6,10,8,8,10,8,6,9,8,4,10,8,7,8,8,6,7,6,6,9,5,3,9,7,6
-6B,Brue Angel Luis,Raso Masculino (BM),1,248,10,10,7,10,8,6,10,8,5,10,10,8,10,7,6,9,8,6,9,8,5,10,9,9,9,8,7,10,9,8
-6B,Brue Angel Luis,Raso Masculino (BM),2,221,9,7,6,8,7,7,10,8,6,10,8,6,10,6,6,9,8,7,10,9,3,9,9,7,9,9,8,7,4,M
-6C,Torres Angela Mariana,Raso Femenino (BW),1,188,9,8,6,8,7,7,9,6,3,8,8,5,10,3,1,9,6,5,7,5,4,8,6,5,10,6,3,6,6,4
-6C,Torres Angela Mariana,Raso Femenino (BW),2,159,4,6,5,8,5,2,5,3,2,8,7,3,6,5,4,6,5,4,10,6,4,7,5,4,8,7,M,6,6,3
-6D,Danna Susana Laura,Raso Femenino (BW),1,210,10,9,8,9,5,5,9,9,7,8,7,6,7,4,3,10,8,4,9,7,4,10,8,8,9,8,M,7,6,6
-6D,Danna Susana Laura,Raso Femenino (BW),2,159,6,3,1,8,7,4,7,6,4,9,6,3,5,3,M,8,4,4,6,3,2,9,8,7,9,4,2,9,7,5
-7A,Genovesio Gonzalo,Raso Masculino 50+ (B 50M),1,205,8,7,5,9,8,2,7,6,2,8,7,6,9,9,6,6,6,6,8,6,5,9,6,5,9,8,8,9,8,7
-7A,Genovesio Gonzalo,Raso Masculino 50+ (B 50M),2,219,8,8,6,9,9,8,8,5,5,9,7,1,9,7,7,8,8,8,9,7,5,10,7,4,10,10,9,7,6,5
-7B,Barros Gustavo Seferino,Raso Masculino 50+ (B 50M),1,197,7,3,3,9,6,5,9,8,3,8,7,6,8,7,2,8,6,3,10,7,6,8,8,7,8,8,8,8,7,4
-7B,Barros Gustavo Seferino,Raso Masculino 50+ (B 50M),2,146,6,5,M,6,3,M,6,4,1,5,4,M,9,7,7,8,7,3,9,7,4,10,9,3,6,4,3,6,4,1
-7C,Sanchez Javier Ramon,Raso Masculino 50+ (B 50M),1,204,8,7,5,8,6,6,7,6,4,10,6,4,8,6,5,10,7,5,9,9,7,9,9,5,8,6,5,9,6,4
-7C,Sanchez Javier Ramon,Raso Masculino 50+ (B 50M),2,189,9,8,6,9,9,3,9,7,7,10,6,5,5,4,1,7,6,3,10,7,4,8,6,4,9,7,5,6,5,3
-7D,Trossero Andrio,Raso Masculino 50+ (B 50M),1,175,8,7,3,7,6,3,6,4,2,8,5,4,9,8,8,7,6,4,9,8,8,9,3,2,9,4,M,6,3,M
-7D,Trossero Andrio,Raso Masculino 50+ (B 50M),2,194,7,6,5,9,6,4,6,5,4,9,3,2,10,8,5,10,10,6,8,7,6,8,5,5,8,7,6,8,7,6
-8A,Pinto Alberto Roman,Raso Masculino (BM),1,231,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
-8A,Pinto Alberto Roman,Raso Masculino (BM),2,227,9,7,8,9,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
-8B,Pisani Daniel Gaudencio,Raso Masculino 50+ (B 50M),1,206,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,5,7,7,5,7,8,5,7
-8B,Pisani Daniel Gaudencio,Raso Masculino 50+ (B 50M),2,217,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
-8C,Lopez Walter,Raso Masculino 50+ (B 50M),1,204,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,5,7,8,5,7,8,5,7,7,5,7,8,5,7
-8C,Lopez Walter,Raso Masculino 50+ (B 50M),2,220,8,6,7,8,6,7,8,6,7,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
-8D,Leal Carlos Eduardo,Raso Masculino 50+ (B 50M),1,168,7,5,6,7,5,6,7,4,6,6,4,6,7,4,6,6,4,6,7,4,6,6,4,6,7,4,6,6,4,6
-8D,Leal Carlos Eduardo,Raso Masculino 50+ (B 50M),2,167,7,5,6,7,4,6,7,4,6,6,4,6,7,4,6,6,4,6,7,4,6,6,4,6,7,4,6,6,4,6
-9B,Foglia Eduardo Santiago,Recurvo Escuela 40 (R E40),1,223,8,6,7,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
-9B,Foglia Eduardo Santiago,Recurvo Escuela 40 (R E40),2,210,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,5,8
-9C,Britos Joaquin Elias,Recurvo Escuela 40 (R E40),1,253,9,7,8,9,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
-9C,Britos Joaquin Elias,Recurvo Escuela 40 (R E40),2,234,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,8,6,8,9,6,8,8,6,8
-9D,Martinez Jorge,Recurvo Escuela 40 (R E40),1,161,6,4,5,6,4,5,6,4,6,6,4,6,7,4,6,6,4,6,7,4,6,6,4,6,7,4,6,6,4,6
-9D,Martinez Jorge,Recurvo Escuela 40 (R E40),2,199,8,6,7,8,6,7,8,5,7,8,5,7,7,5,7,8,5,7,7,5,7,8,5,7,7,5,7,8,5,7
-10A,Amaya Martin,Recurvo Escuela 40 (R E40),1,213,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,9,6,8,8,6,8
-10A,Amaya Martin,Recurvo Escuela 40 (R E40),2,220,8,6,7,8,6,7,8,6,7,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
-10B,Garcia Moretta Francisco Tomas,Recurvo Escuela 40 (R E40),1,214,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,8,9,6,8,8,6,8
-10B,Garcia Moretta Francisco Tomas,Recurvo Escuela 40 (R E40),2,227,9,7,8,9,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
-10C,Echenique Elias Pablo,Recurvo Escuela 40 (R E40),1,236,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,9,6,8,8,6,8
-10C,Echenique Elias Pablo,Recurvo Escuela 40 (R E40),2,229,9,7,8,9,7,8,9,6,8,9,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
-10D,Comia Luis Marcelo,Recurvo Escuela 40 (R E40),1,221,8,6,7,8,6,7,8,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
-10D,Comia Luis Marcelo,Recurvo Escuela 40 (R E40),2,234,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,8,6,8,9,6,8,8,6,8
-11A,Rios Franco Andres,Recurvo Escuela 40 (R E40),1,214,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,8,9,6,8,8,6,8
-11A,Rios Franco Andres,Recurvo Escuela 40 (R E40),2,203,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,5,7,7,5,7,8,5,7,7,5,7,8,5,7
-11B,Pinto Victor Emanuel,Recurvo Escuela 40 (R E40),1,250,9,7,8,9,7,8,9,7,8,9,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
-11B,Pinto Victor Emanuel,Recurvo Escuela 40 (R E40),2,254,9,7,8,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
-11C,Hernandez Leonardo Javier,Recurvo Escuela 40 (R E40),1,224,8,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
-11C,Hernandez Leonardo Javier,Recurvo Escuela 40 (R E40),2,181,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,7
-11D,Lunedei Valentino,Recurvo Sub 15 (R U15M),1,257,10,8,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
-11D,Lunedei Valentino,Recurvo Sub 15 (R U15M),2,238,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,9,6,8
-12A,Spertino Raul Armando,Recurvo Escuela 60 (R E60),1,243,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,9,10,7,9
-12A,Spertino Raul Armando,Recurvo Escuela 60 (R E60),2,249,9,7,8,9,7,8,9,7,8,9,7,8,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
-12B,Gelosi Patricia Alejandra,Recurvo Escuela 60 (R E60),1,250,9,7,8,9,7,8,9,7,8,9,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
-12B,Gelosi Patricia Alejandra,Recurvo Escuela 60 (R E60),2,251,9,7,8,9,7,8,9,7,8,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
-12C,Andueza Gerardo Miguel,Recurvo Escuela 60 (R E60),1,238,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,9,6,8
-12C,Andueza Gerardo Miguel,Recurvo Escuela 60 (R E60),2,235,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,9,6,8,9,6,8,8,6,8
-12D,Garrido Natalia Andrea,Recurvo Escuela 60 (R E60),1,236,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,9,6,8,8,6,8
-12D,Garrido Natalia Andrea,Recurvo Escuela 60 (R E60),2,245,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,10,7,9,9,7,9,10,7,9
-13A,Peralta Marcela Edith,Recurvo Escuela 60 (R E60),1,248,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
-13A,Peralta Marcela Edith,Recurvo Escuela 60 (R E60),2,218,8,6,7,8,6,7,8,6,7,8,6,7,8,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
-13B,Carnero Mariana,Recurvo Escuela 60 (R E60),1,202,8,6,7,8,6,7,8,6,7,8,6,7,8,5,7,8,5,7,7,5,7,8,5,7,7,5,7,8,5,7
-13B,Carnero Mariana,Recurvo Escuela 60 (R E60),2,186,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,7,8,5,7,7,5,7,8,5,7
-13C,Cantisani Maria Luz,Recurvo Escuela 60 (R E60),1,258,10,8,9,10,7,9,10,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
-13C,Cantisani Maria Luz,Recurvo Escuela 60 (R E60),2,250,9,7,8,9,7,8,9,7,8,9,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
-13D,Acastello Lautaro Ariel,Raso Escuela 60 (B E60),1,207,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,5,7,8,5,7,8,5,7
-13D,Acastello Lautaro Ariel,Raso Escuela 60 (B E60),2,222,8,6,7,8,6,7,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
-14A,Barrera Paola Ester,Raso Escuela 60 (B E60),1,181,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,7
-14A,Barrera Paola Ester,Raso Escuela 60 (B E60),2,172,7,5,6,7,5,6,7,5,6,7,5,6,7,4,6,7,4,6,7,4,6,6,4,6,7,4,6,6,4,6
-14B,Rivadero Sergio Benito,Raso Escuela 60 (B E60),1,252,9,7,8,9,7,8,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
-14B,Rivadero Sergio Benito,Raso Escuela 60 (B E60),2,250,9,7,8,9,7,8,9,7,8,9,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
-14C,Alegre Leandro Gaston,Raso Escuela 60 (B E60),1,247,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,9,9,7,9,10,7,9,9,7,9,10,7,9
-14C,Alegre Leandro Gaston,Raso Escuela 60 (B E60),2,251,9,7,8,9,7,8,9,7,8,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
-15A,Acastello German Dario,Raso Escuela 60 (B E60),1,219,8,6,7,8,6,7,8,6,7,8,6,7,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
-15A,Acastello German Dario,Raso Escuela 60 (B E60),2,225,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
-15C,Grande Matias Jesus,Raso Escuela 60 (B E60),1,211,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,8
-15C,Grande Matias Jesus,Raso Escuela 60 (B E60),2,238,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,9,6,8
-16A,Callejo Matias Nicolas,Raso Escuela 60 (B E60),1,175,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,4,6,7,4,6,7,4,6,6,4,6
-16A,Callejo Matias Nicolas,Raso Escuela 60 (B E60),2,187,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,7,7,5,7,8,5,7,7,5,7,8,5,7
-16B,Montoya Maricel Del Valle,Raso Escuela 60 (B E60),1,238,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,9,6,8
-16B,Montoya Maricel Del Valle,Raso Escuela 60 (B E60),2,250,9,7,8,9,7,8,9,7,8,9,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
-16C,Groppo Florencia,Raso Escuela 60 (B E60),1,242,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,10,7,9
-16C,Groppo Florencia,Raso Escuela 60 (B E60),2,251,9,7,8,9,7,8,9,7,8,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
-17A,Torres Serena,Recurvo Escuela 80 (R E80),1,267,10,8,9,10,8,9,10,8,9,10,8,9,10,8,9,10,8,9,10,8,9,10,7,9,10,7,9,10,7,9
-17A,Torres Serena,Recurvo Escuela 80 (R E80),2,263,10,8,9,10,8,9,10,8,9,10,8,9,10,8,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
-17B,Viotti Castro Luca Jose,Recurvo Escuela 80 (R E80),1,247,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,9,9,7,9,10,7,9,9,7,9,10,7,9
-17B,Viotti Castro Luca Jose,Recurvo Escuela 80 (R E80),2,226,9,6,8,9,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
-17C,Peralta Marilangel Del Valle,Recurvo Escuela 80 (R E80),1,248,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
-17C,Peralta Marilangel Del Valle,Recurvo Escuela 80 (R E80),2,245,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,10,7,9,9,7,9,10,7,9
-17D,Vignolo Dante Valentino,Recurvo Escuela 80 (R E80),1,236,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,9,6,8,8,6,8
-17D,Vignolo Dante Valentino,Recurvo Escuela 80 (R E80),2,228,9,7,8,9,7,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
-18A,Farias Emanuel Alejandro,Recurvo Escuela 80 (R E80),1,207,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,5,7,8,5,7,8,5,7
-18A,Farias Emanuel Alejandro,Recurvo Escuela 80 (R E80),2,223,8,6,7,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
-18B,Vilkelis Andrea,Recurvo Escuela 80 (R E80),1,221,8,6,7,8,6,7,8,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
-18B,Vilkelis Andrea,Recurvo Escuela 80 (R E80),2,243,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,9,10,7,9
-18C,Murillo Guillermo,Recurvo Escuela 80 (R E80),1,219,8,6,7,8,6,7,8,6,7,8,6,7,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
-18C,Murillo Guillermo,Recurvo Escuela 80 (R E80),2,230,9,7,8,9,7,8,9,7,8,9,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
-18D,Panero Valentina,Recurvo Escuela 80 (R E80),1,196,8,5,7,8,5,7,7,5,7,8,5,7,7,5,7,8,5,7,7,5,7,8,5,7,7,5,7,8,5,7
-18D,Panero Valentina,Recurvo Escuela 80 (R E80),2,210,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,5,8
-19A,Quiroga Valentin Fabian,Recurvo Sub 18 Escuela 80 (R U18E80),1,243,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,9,10,7,9
-19A,Quiroga Valentin Fabian,Recurvo Sub 18 Escuela 80 (R U18E80),2,223,8,6,7,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
-19B,Rocco Marianela,Recurvo Sub 15 Escuela 80 (R U15E80),1,186,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,7,8,5,7,7,5,7,8,5,7
-19B,Rocco Marianela,Recurvo Sub 15 Escuela 80 (R U15E80),2,202,8,6,7,8,6,7,8,6,7,8,6,7,8,5,7,8,5,7,7,5,7,8,5,7,7,5,7,8,5,7
-19C,Simonelli Yanel Paola,Recurvo Sub 15 Escuela 80 (R U15E80),1,220,8,6,7,8,6,7,8,6,7,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
-19C,Simonelli Yanel Paola,Recurvo Sub 15 Escuela 80 (R U15E80),2,213,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,9,6,8,8,6,8
-20A,Gonzalez Laura Cecilia,Raso Escuela 80 (B E80),1,242,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,10,7,9
-20A,Gonzalez Laura Cecilia,Raso Escuela 80 (B E80),2,231,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
-20B,Ranallo Maria Daniela,Raso Escuela 80 (B E80),1,232,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,9,6,8,9,6,8,8,6,8,9,6,8,8,6,8
-20B,Ranallo Maria Daniela,Raso Escuela 80 (B E80),2,234,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,8,6,8,9,6,8,8,6,8
-20C,Asencio Felipe Manuel,Raso Escuela 80 (B E80),1,243,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,9,10,7,9
-20C,Asencio Felipe Manuel,Raso Escuela 80 (B E80),2,239,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8
-20D,Caamaño Emilio,Raso Escuela 80 (B E80),1,206,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,5,7,7,5,7,8,5,7
-20D,Caamaño Emilio,Raso Escuela 80 (B E80),2,216,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,9,6,8,8,6,8,9,6,8,8,6,8
-21A,Benitez Ayrton,Raso Escuela 80 (B E80),1,240,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8
-21A,Benitez Ayrton,Raso Escuela 80 (B E80),2,231,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
-21B,Zamora Juan Pablo,Raso Escuela 80 (B E80),1,180,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6
-21B,Zamora Juan Pablo,Raso Escuela 80 (B E80),2,166,7,4,6,7,4,6,7,4,6,6,4,6,7,4,6,6,4,6,7,4,6,6,4,6,7,4,6,6,4,6
-21C,Córdoba Natalia Noelia,Raso Escuela 80 (B E80),1,195,7,5,7,8,5,7,7,5,7,8,5,7,7,5,7,8,5,7,7,5,7,8,5,7,7,5,7,8,5,7
-21C,Córdoba Natalia Noelia,Raso Escuela 80 (B E80),2,214,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,8,9,6,8,8,6,8
-21D,Remi Sandra Loreley,Raso Escuela 80 (B E80),1,231,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
-21D,Remi Sandra Loreley,Raso Escuela 80 (B E80),2,217,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
-22A,Schiozzi Marcelo Ariel,Raso Escuela 80 (B E80),1,250,9,7,8,9,7,8,9,7,8,9,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
-22A,Schiozzi Marcelo Ariel,Raso Escuela 80 (B E80),2,247,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,9,9,7,9,10,7,9,9,7,9,10,7,9
-22B,Gribaudo Andrea,Raso Escuela 80 (B E80),1,240,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8
-22B,Gribaudo Andrea,Raso Escuela 80 (B E80),2,241,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,9
-22C,Castelli Federico,Raso Sub 18 Escuela 80 (B U18E80),1,217,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
-22C,Castelli Federico,Raso Sub 18 Escuela 80 (B U18E80),2,220,8,6,7,8,6,7,8,6,7,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
-23A,Aldazoro Abigail,Tradicional Escuela 80 (T E80),1,175,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,5,6,7,4,6,7,4,6,7,4,6,6,4,6
-23A,Aldazoro Abigail,Tradicional Escuela 80 (T E80),2,202,8,6,7,8,6,7,8,6,7,8,6,7,8,5,7,8,5,7,7,5,7,8,5,7,7,5,7,8,5,7
-23B,Gaido Mateo Agustin,Raso Sub 15 Escuela 80 (B U15E80),1,233,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,9,6,8,8,6,8,9,6,8,8,6,8
-23B,Gaido Mateo Agustin,Raso Sub 15 Escuela 80 (B U15E80),2,256,10,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
-24A,Wendler Natasha,Recurvo Sub 13 Infantil 15m (R U13I15),1,258,10,8,9,10,7,9,10,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
-24A,Wendler Natasha,Recurvo Sub 13 Infantil 15m (R U13I15),2,261,10,8,9,10,8,9,10,8,9,10,7,9,10,7,9,10,7,9,9,7,9,10,7,9,9,7,9,10,7,9
-24B,Bicego Emma Bela,Raso Sub 13 Infantil 15m (B U13I15),1,235,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,7,8,9,6,8,9,6,8,9,6,8,8,6,8
-24B,Bicego Emma Bela,Raso Sub 13 Infantil 15m (B U13I15),2,220,8,6,7,8,6,7,8,6,7,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
-25A,Leiva Santiago Ismael,Raso Sub 13 Infantil 10m (B U13I10),1,220,8,6,7,8,6,7,8,6,7,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
-25A,Leiva Santiago Ismael,Raso Sub 13 Infantil 10m (B U13I10),2,225,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8,9,6,8,8,6,8
-25B,Rocco Lucila,Raso Sub 13 Infantil 10m (B U13I10),1,203,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,5,7,7,5,7,8,5,7,7,5,7,8,5,7
-25B,Rocco Lucila,Raso Sub 13 Infantil 10m (B U13I10),2,213,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,9,6,8,8,6,8
-25C,Vera Benicio Isaias,Raso Sub 13 Infantil 10m (B U13I10),1,203,8,6,7,8,6,7,8,6,7,8,6,7,8,6,7,8,5,7,7,5,7,8,5,7,7,5,7,8,5,7
-25C,Vera Benicio Isaias,Raso Sub 13 Infantil 10m (B U13I10),2,145,6,4,5,6,4,5,6,4,5,6,4,5,6,4,5,6,4,5,6,3,5,6,3,5,5,3,5,6,3,5
-</file>
+<file path="requirements.txt">
+# Requerimientos para la aplicación de Tiro con Arco
+# Generado automáticamente a partir de app_tiro_con_arco-v32.py
 
-<file path="AGENTS.md">
+# Manipulación de datos
+pandas
+numpy
 
+# Interfaz gráfica web
+gradio>=4.0.0
+
+# Procesamiento de imágenes
+Pillow
+opencv-python
+
+# Peticiones HTTP para la API de NVIDIA
+requests
+
+# Soporte para archivos PDF (opcional pero recomendado)
+pypdfium2
 </file>
 
 <file path="LICENSE">
@@ -3195,28 +2916,6 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-</file>
-
-<file path="requirements.txt">
-# Requerimientos para la aplicación de Tiro con Arco
-# Generado automáticamente a partir de app_tiro_con_arco-v32.py
-
-# Manipulación de datos
-pandas
-numpy
-
-# Interfaz gráfica web
-gradio>=4.0.0
-
-# Procesamiento de imágenes
-Pillow
-opencv-python
-
-# Peticiones HTTP para la API de NVIDIA
-requests
-
-# Soporte para archivos PDF (opcional pero recomendado)
-pypdfium2
 </file>
 
 <file path=".gitignore">
@@ -3299,9 +2998,45 @@ python src/app_tiro_con_arco.py
 
 # Agentes
 
-## Agente 1: clasificador y segmentador
+## 🤖 Agente 1: Clasificador y Segmentador Semántico por Páginas 
+**Objetivo:** Recibir el archivo de entrada (**PDF multipágina** o **Imagen PNG/JPG**), procesar página por página mediante análisis híbrido (**extracción de texto semántico y visión por computadora con OpenCV/Pillow**), clasificar la estructura del documento y segmentar ordenadamente las zonas de cada arquero, emitiendo un **manifiesto JSON con la cola de trabajo estandarizada** para el Agente 2.
 
-**Objetivo:** Recibir el archivo (PDF multipágina o Imagen), procesar página por página, detectar el tipo de planilla (**Clasificación** vs  **Eliminatoria** ) y segmentar ordenadamente los cuadrantes de arqueros con OpenCV/Pillow, emitiendo un manifiesto JSON con la cola de trabajo
+### 🧠 Lógica de Clasificación Semántica (Text-Anchored Classification)
+A diferencia de los cortes geométricos estáticos, el Agente 1 analiza anclas de texto e identificadores clave en la página completa: * **Eliminatoria (`2_arqueros` / Duelos Directos):** Detecta la presencia de marcas exclusivas de enfrentamientos directos como `"Ganador"`, `"Total Set Points"`, `"S.O."` (Shoot-Off), `"Contención XA/XB"` o `"Posición X"` (puesto en la llave/bracket). * **Clasificación (`4_arqueros` o `1_arquero`):** Detecta sufijos de diana/contención física (`XA`, `XB`, `XC`, `XD`). * Si encuentra 3 o 4 combinaciones: clasifica como `4_arqueros` (matriz 2x2). * Si encuentra 1 sola combinación: clasifica como `1_arquero` (planilla individual). * **Portada / Separador (`portada`):** Si la página no contiene grillas de puntuación ni anclas de tiro (páginas de título o reglamentos), la clasifica como `sin_modo`.
+
+### ✂️ Estrategia de Segmentación y Recorte Posicional
+El Agente 1 no asume números fijados de diana (evita hardcodear `"1A"`, `"1B"`), sino **etiquetas posicionales dinámicas**: * **Clasificación (4 Arqueros):** Asigna slots posicionales `Pos_A`, `Pos_B`, `Pos_C` y `Pos_D`. Aplica un **solape vertical del 12%** (`y = 38%` de la altura) para los cuadrantes inferiores (`Pos_C` y `Pos_D`), garantizando que la caja superior con el nombre del atleta nunca quede recortada. * **Eliminatoria (2 Arqueros / Duelos):** Asigna slots `Puesto_1` (Izquierda) y `Puesto_2` (Derecha). Realiza el corte desde el borde superior absoluto (`y = 0`), manteniendo visibles el nombre del arquero, club, categoría y la tabla de *Set Points*. * **Individual (1 Arquero):** Conserva el **100% de la imagen original** sin recortar (`posicion_slot: "Individual"`). * **Portada:** Conserva la vista entera etiquetada como `posicion_slot: "Portada"`.
+
+### 📄 Salida (Manifiesto JSON)
+Genera una cola de trabajo estructurada en disco con el siguiente formato:
+```json 
+{ 
+     "archivo_origen": "torneo_copa_san_francisco.pdf", 
+     "total_paginas": 3, 
+     "tareas_agente2": [
+          {
+               "pagina": 1,
+               "posicion_slot": "Portada",
+               "tipo_juego": "sin_modo",
+               "layout": "portada",
+               "ruta_recorte": "/tmp/archery_agent1/pag_1_crop_Portada.png"
+          },
+          { 
+               "pagina": 2, 
+               "posicion_slot": "Pos_A",
+               "tipo_juego": "clasificacion",
+               "layout": "4_arqueros",
+               "ruta_recorte": "/tmp/archery_agent1/pag_2_crop_Pos_A.png"
+          },
+          { 
+               "pagina": 3,
+               "posicion_slot": "Puesto_1",
+               "tipo_juego": "eliminatoria",
+               "layout": "2_arqueros",
+               "ruta_recorte": "/tmp/archery_agent1/pag_3_crop_Puesto_1.png"
+          }
+     ] 
+}
 </file>
 
 </files>

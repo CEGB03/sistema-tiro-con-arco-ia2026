@@ -57,6 +57,42 @@ python src/app_tiro_con_arco.py
 
 # Agentes
 
-## Agente 1: clasificador y segmentador
+## 🤖 Agente 1: Clasificador y Segmentador Semántico por Páginas 
+**Objetivo:** Recibir el archivo de entrada (**PDF multipágina** o **Imagen PNG/JPG**), procesar página por página mediante análisis híbrido (**extracción de texto semántico y visión por computadora con OpenCV/Pillow**), clasificar la estructura del documento y segmentar ordenadamente las zonas de cada arquero, emitiendo un **manifiesto JSON con la cola de trabajo estandarizada** para el Agente 2.
 
-**Objetivo:** Recibir el archivo (PDF multipágina o Imagen), procesar página por página, detectar el tipo de planilla (**Clasificación** vs  **Eliminatoria** ) y segmentar ordenadamente los cuadrantes de arqueros con OpenCV/Pillow, emitiendo un manifiesto JSON con la cola de trabajo
+### 🧠 Lógica de Clasificación Semántica (Text-Anchored Classification)
+A diferencia de los cortes geométricos estáticos, el Agente 1 analiza anclas de texto e identificadores clave en la página completa: * **Eliminatoria (`2_arqueros` / Duelos Directos):** Detecta la presencia de marcas exclusivas de enfrentamientos directos como `"Ganador"`, `"Total Set Points"`, `"S.O."` (Shoot-Off), `"Contención XA/XB"` o `"Posición X"` (puesto en la llave/bracket). * **Clasificación (`4_arqueros` o `1_arquero`):** Detecta sufijos de diana/contención física (`XA`, `XB`, `XC`, `XD`). * Si encuentra 3 o 4 combinaciones: clasifica como `4_arqueros` (matriz 2x2). * Si encuentra 1 sola combinación: clasifica como `1_arquero` (planilla individual). * **Portada / Separador (`portada`):** Si la página no contiene grillas de puntuación ni anclas de tiro (páginas de título o reglamentos), la clasifica como `sin_modo`.
+
+### ✂️ Estrategia de Segmentación y Recorte Posicional
+El Agente 1 no asume números fijados de diana (evita hardcodear `"1A"`, `"1B"`), sino **etiquetas posicionales dinámicas**: * **Clasificación (4 Arqueros):** Asigna slots posicionales `Pos_A`, `Pos_B`, `Pos_C` y `Pos_D`. Aplica un **solape vertical del 12%** (`y = 38%` de la altura) para los cuadrantes inferiores (`Pos_C` y `Pos_D`), garantizando que la caja superior con el nombre del atleta nunca quede recortada. * **Eliminatoria (2 Arqueros / Duelos):** Asigna slots `Puesto_1` (Izquierda) y `Puesto_2` (Derecha). Realiza el corte desde el borde superior absoluto (`y = 0`), manteniendo visibles el nombre del arquero, club, categoría y la tabla de *Set Points*. * **Individual (1 Arquero):** Conserva el **100% de la imagen original** sin recortar (`posicion_slot: "Individual"`). * **Portada:** Conserva la vista entera etiquetada como `posicion_slot: "Portada"`.
+
+### 📄 Salida (Manifiesto JSON)
+Genera una cola de trabajo estructurada en disco con el siguiente formato:
+```json 
+{ 
+     "archivo_origen": "torneo_copa_san_francisco.pdf", 
+     "total_paginas": 3, 
+     "tareas_agente2": [
+          {
+               "pagina": 1,
+               "posicion_slot": "Portada",
+               "tipo_juego": "sin_modo",
+               "layout": "portada",
+               "ruta_recorte": "/tmp/archery_agent1/pag_1_crop_Portada.png"
+          },
+          { 
+               "pagina": 2, 
+               "posicion_slot": "Pos_A",
+               "tipo_juego": "clasificacion",
+               "layout": "4_arqueros",
+               "ruta_recorte": "/tmp/archery_agent1/pag_2_crop_Pos_A.png"
+          },
+          { 
+               "pagina": 3,
+               "posicion_slot": "Puesto_1",
+               "tipo_juego": "eliminatoria",
+               "layout": "2_arqueros",
+               "ruta_recorte": "/tmp/archery_agent1/pag_3_crop_Puesto_1.png"
+          }
+     ] 
+}
