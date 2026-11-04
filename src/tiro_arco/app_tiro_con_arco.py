@@ -1,98 +1,89 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🎯 Servidor Principal y Orquestador Web - Sistema de Tiro con Arco (Multi-Agente)
-
-Lanza la interfaz en local en http://localhost:7860.
-Ejecuta el Agente 1 (Clasificador y Segmentador por páginas) con soporte multi-módulo.
+🚀 Servidor Principal Multi-Agente Gradio - Tiro con Arco (Agente 1 + Agente 2).
 """
 
 import os
-import sys
 import json
 import gradio as gr
-from PIL import Image
+from tiro_arco.agente_1_clasificador_segmentador import AgenteClasificadorSegmentador
+from tiro_arco.agente_2_ocr_extractor import Agente2OCRExtractor
 
-# Importación robusta compatible con estructura de paquete tiro_arco y ejecución directa
-try:
-    from .agente_1_clasificador_segmentador import AgenteClasificadorSegmentador
-except ImportError:
+
+def ejecutar_pipeline_multiagente(archivo_input, tipo_juego_manual):
+    if archivo_input is None:
+        return "⚠️ Por favor, selecciona o sube un archivo (PDF o Imagen).", "", None
+
+    ruta_archivo = archivo_input.name if hasattr(archivo_input, 'name') else str(archivo_input)
+    
     try:
-        from tiro_arco.agente_1_clasificador_segmentador import AgenteClasificadorSegmentador
-    except ImportError:
-        from agente_1_clasificador_segmentador import AgenteClasificadorSegmentador
-
-agente_1 = AgenteClasificadorSegmentador()
-
-def tipo_juego_manual_map(val):
-    if "Clasificación" in val:
-        return "clasificacion"
-    elif "Eliminatoria" in val:
-        return "eliminatoria"
-    return None
-
-def procesar_con_agente_1(file_obj, tipo_juego_override):
-    if file_obj is None:
-        return "⚠️ Por favor, selecciona un archivo (PDF o Imagen).", [], "{}"
-
-    file_path = file_obj.name
-    tipo_manual = None if tipo_juego_override == "Automático" else tipo_juego_manual_map(tipo_juego_override)
-
-    try:
-        manifiesto = agente_1.procesar_documento(file_path, tipo_juego_manual=tipo_manual)
-        
-        # Preparar resumen de diagnóstico
-        resumen_md = f"### 📊 Diagnóstico del Agente 1\n"
-        resumen_md += f"- **Archivo Origen:** `{manifiesto['archivo_origen']}`\n"
-        resumen_md += f"- **Total de Páginas Renderizadas:** `{manifiesto['total_paginas']}`\n"
-        resumen_md += f"- **Recortes Generados (Tareas Agente 2):** `{len(manifiesto['tareas_agente2'])}` \n\n"
-
-        # Cargar imágenes de vista previa de los recortes
-        gallery_images = []
-        for tarea in manifiesto["tareas_agente2"]:
-            crop_path = tarea["ruta_recorte"]
-            if os.path.exists(crop_path):
-                label = f"Pág {tarea['pagina']} - {tarea['target_id']} ({tarea['tipo_juego'].capitalize()})"
-                gallery_images.append((crop_path, label))
-
-        json_str = json.dumps(manifiesto, indent=2, ensure_ascii=False)
-        return resumen_md, gallery_images, json_str
-
+        agente1 = AgenteClasificadorSegmentador()
+        manifiesto1 = agente1.procesar_documento(ruta_archivo, tipo_juego_manual=tipo_juego_manual)
     except Exception as e:
-        err_msg = f"❌ Error durante el procesamiento con Agente 1: {str(e)}"
-        return err_msg, [], "{}"
+        return f"❌ Error en Agente 1 (Segmentación): {str(e)}", "", None
 
-def main():
-    with gr.Blocks(title="🎯 Orquestador Multi-Agente - Tiro con Arco") as demo:
-        gr.Markdown("# 🎯 Sistema Multi-Agente de Transcripción - Tiro con Arco")
-        gr.Markdown("Servidor principal web. Actualmente ejecuta el **Agente 1: Clasificador y Segmentador por Páginas**.")
+    try:
+        agente2 = Agente2OCRExtractor()
+        manifiesto2 = agente2.procesar_manifiesto_agente1(manifiesto1)
+    except Exception as e:
+        manifiesto2 = {"error": f"Falla en Agente 2: {str(e)}", "transcripciones": []}
+
+    resumen_md = "### 📊 Diagnóstico Multi-Agente (Agente 1 + Agente 2)\n"
+    resumen_md += f"- **Archivo Origen:** `{manifiesto1.get('archivo_origen', '')}`\n"
+    resumen_md += f"- **Total de Páginas:** `{manifiesto1.get('total_paginas', 0)}`\n"
+    resumen_md += f"- **Tareas de Segmentación (Agente 1):** `{len(manifiesto1.get('tareas_agente2', []))}`\n"
+    resumen_md += f"- **Transcripciones OCR (Agente 2):** `{len(manifiesto2.get('transcripciones', []))}`\n\n"
+
+    resumen_md += "#### 🎯 Detalle de Transcripciones por Arquero:\n"
+    for item in manifiesto2.get("transcripciones", []):
+        tr = item.get("transcripcion", {})
+        resumen_md += f"- **Página {item.get('pagina')} ({item.get('target_id')}):** Arquero: `{tr.get('arquero', 'N/A')}` | Diana: `{tr.get('target', 'N/A')}` | Modelo: `{tr.get('modelo_usado', 'N/A')}`\n"
+
+    json_str = json.dumps({
+        "agente_1_manifiesto": manifiesto1,
+        "agente_2_manifiesto": manifiesto2
+    }, indent=2, ensure_ascii=False)
+
+    return resumen_md, json_str, manifiesto1
+
+
+def construir_interfaz():
+    with gr.Blocks(title="Sistema Multi-Agente Tiro con Arco") as demo:
+        gr.Markdown("# 🎯 Sistema Multi-Agente para Planillas de Tiro con Arco")
+        gr.Markdown("Pipeline inteligente: **Agente 1 (Segmentación PDI)** ➔ **Agente 2 (Preprocesamiento & OCR Multimodal NVIDIA NIM)**")
 
         with gr.Row():
             with gr.Column(scale=1):
-                file_input = gr.File(label="Subir Planilla (PDF o Imagen)", file_types=[".pdf", ".png", ".jpg", ".jpeg"])
-                tipo_override = gr.Dropdown(
-                    label="Modo de Juego",
-                    choices=["Automático", "Clasificación (4 Arqueros)", "Eliminatoria (2 Arqueros / Duelos)"],
-                    value="Automático"
+                archivo_input = gr.File(label="Subir Planilla (PDF o Imagen PNG/JPG)", file_types=[".pdf", ".png", ".jpg", ".jpeg"])
+                tipo_juego_manual = gr.Dropdown(
+                    label="Modo Juego (Opcional - Detección Automática por defecto)",
+                    choices=["Auto", "clasificacion", "eliminatoria"],
+                    value="Auto"
                 )
-                btn_process = gr.Button("🚀 Ejecutar Agente 1 (Segmentar Documento)", variant="primary")
+                btn_ejecutar = gr.Button("🚀 Ejecutar Pipeline Multi-Agente", variant="primary")
 
             with gr.Column(scale=2):
-                status_box = gr.Markdown(value="Esperando archivo para procesar...")
-                gallery_out = gr.Gallery(label="✂️ Recortes Generados por Agente 1", columns=2, height=350)
-                json_out = gr.Code(label="📄 Manifiesto JSON Generado (Entrada para Agente 2)", language="json")
+                resumen_output = gr.Markdown(label="Resumen de Diagnóstico")
+                json_output = gr.Code(label="Manifiesto Resultante (JSON)", language="json")
 
-        btn_process.click(
-            fn=procesar_con_agente_1,
-            inputs=[file_input, tipo_override],
-            outputs=[status_box, gallery_out, json_out]
+        btn_ejecutar.click(
+            fn=ejecutar_pipeline_multiagente,
+            inputs=[archivo_input, tipo_juego_manual],
+            outputs=[resumen_output, json_output]
         )
 
-    print("=" * 60)
+    return demo
+
+
+def main():
+    print("============================================================")
     print("🚀 Servidor Principal Multi-Agente - Tiro con Arco")
     print("🌍 Abre tu navegador en: http://localhost:7860")
-    print("=" * 60)
+    print("============================================================")
+    demo = construir_interfaz()
     demo.launch(server_name="0.0.0.0", server_port=7860, share=False)
+
 
 if __name__ == "__main__":
     main()
