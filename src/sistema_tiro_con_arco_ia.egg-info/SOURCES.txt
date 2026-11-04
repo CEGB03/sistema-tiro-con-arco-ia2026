@@ -10,5 +10,5 @@ src/sistema_tiro_con_arco_ia.egg-info/top_level.txt
 src/tiro_arco/__init__.py
 src/tiro_arco/__main__.py
 src/tiro_arco/agente_1_clasificador_segmentador.py
-src/tiro_arco/app.py
+src/tiro_arco/app_tiro_con_arco.py
 tests/test_agente_1.py
