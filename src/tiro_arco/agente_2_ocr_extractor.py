@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🤖 Agente 2: Preprocesador de Imagen y Extractor OCR Multimodal / Document Parser (NVIDIA NIM).
+🤖 Agente 2: Preprocesador de Imagen y Extractor OCR Multimodal (NVIDIA NIM & OpenCV).
 
-Versión v6:
-- Soporte optimizado para 'nvidia/nemotron-3.5-parse' y modelos multimodales de visión.
-- Pipeline de PDI (CLAHE, Bilateral Filter, Deskew, Sharpening).
-- Timeout ampliado (90s) y cadena de resiliencia con fallback a Tesseract OCR.
-- Detección automática y recursiva de NVIDIA_API_KEY desde .env local.
+Responsabilidades:
+1. Recibir el manifiesto JSON generado por el Agente 1 (tareas_agente2).
+2. Omitir páginas clasificadas como 'portada' / 'sin_modo'.
+3. Aplicar preprocesamiento digital de imagen (CLAHE, Denoising, Deskew, Binarización) con OpenCV/Pillow.
+4. Consultar modelos multimodales de NVIDIA NIM (con cadena de fallback masiva de 6 niveles).
+5. Extraer metadatos (Arquero, Club/Siglas, Categoría, Diana/Puesto), 10 series de flechas, sumas parciales escritas y calculadas, 10s, 9s y Xs.
+6. Manejo especial de tiros: 'X' (10 puntos, centro del 10) y 'M' (0 puntos, Miss/Fallo).
+7. Triangulación y cotejo aritmético automático por serie y total general.
 """
 
 import os
@@ -27,11 +30,31 @@ except ImportError:
     OCR_SUPPORT = False
 
 
+def _obtener_nvidia_api_key():
+    key = os.environ.get("NVIDIA_API_KEY", "").strip()
+    if key:
+        return key
+    curr_dir = os.getcwd()
+    for _ in range(5):
+        env_path = os.path.join(curr_dir, ".env")
+        if os.path.exists(env_path):
+            with open(env_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        if k.strip() == "NVIDIA_API_KEY":
+                            val = v.strip().strip('"').strip("'")
+                            os.environ["NVIDIA_API_KEY"] = val
+                            return val
+        parent = os.path.dirname(curr_dir)
+        if parent == curr_dir:
+            break
+        curr_dir = parent
+    return ""
+
+
 class ImageEnhancer:
-    """
-    Pipeline de Preprocesamiento Digital de Imagen (PDI) con OpenCV.
-    Mejora contraste de trazos manuscritos (lápiz/tinta) y remueve ruido.
-    """
     @staticmethod
     def mejorar_imagen(ruta_imagen, output_dir=None):
         if not os.path.exists(ruta_imagen):
@@ -41,14 +64,10 @@ class ImageEnhancer:
         img_np = np.array(img_pil.convert('RGB'))
         gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
 
-        # 1. CLAHE (Contrast Limited Adaptive Histogram Equalization)
         clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
         enhanced_gray = clahe.apply(gray)
-
-        # 2. Filtro Bilateral para suavizar ruido sin perder bordes de trazado
         denoised = cv2.bilateralFilter(enhanced_gray, d=7, sigmaColor=50, sigmaSpace=50)
 
-        # 3. Corrección de Inclinación (Deskew horizontal)
         coords = np.column_stack(np.where(denoised < 180))
         angle = 0.0
         if len(coords) > 50:
@@ -66,7 +85,6 @@ class ImageEnhancer:
         else:
             rotated = denoised
 
-        # 4. Normalización de alto contraste y Nitidez
         kernel_sharpen = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
         sharpened = cv2.filter2D(rotated, -1, kernel_sharpen)
 
@@ -85,16 +103,12 @@ class ImageEnhancer:
 
 
 class Agente2OCRExtractor:
-    """
-    Agente 2: Orquestador de Extracción OCR Multimodal e Inferencia.
-    """
     def __init__(self, api_key=None, output_dir=None):
-        self.api_key = api_key or self._obtener_nvidia_api_key()
+        self.api_key = api_key or _obtener_nvidia_api_key()
         self.output_dir = output_dir or tempfile.mkdtemp(prefix="archery_agent2_")
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir, exist_ok=True)
 
-        # Cadena de modelos NIM optimizados para visión y parsing de planillas
         self.model_chain = [
             "nvidia/nemotron-3.5-parse",
             "meta/llama-3.2-90b-vision-instruct",
@@ -104,140 +118,106 @@ class Agente2OCRExtractor:
             "minimaxai/minimax-m3.1-flash"
         ]
 
-    def _obtener_nvidia_api_key(self):
-        key = os.environ.get("NVIDIA_API_KEY", "").strip()
-        if key:
-            return key
-        
-        curr = os.getcwd()
-        for _ in range(5):
-            env_path = os.path.join(curr, ".env")
-            if os.path.exists(env_path):
-                try:
-                    with open(env_path, "r", encoding="utf-8") as f:
-                        for line in f:
-                            line = line.strip()
-                            if line and not line.startswith("#") and "=" in line:
-                                k, v = line.split("=", 1)
-                                if k.strip() == "NVIDIA_API_KEY":
-                                    val = v.strip().strip('"').strip("'")
-                                    os.environ["NVIDIA_API_KEY"] = val
-                                    return val
-                except Exception:
-                    pass
-            parent = os.path.dirname(curr)
-            if parent == curr:
-                break
-            curr = parent
-        return ""
-
     def _encode_image_b64(self, ruta_imagen):
         with open(ruta_imagen, "rb") as f:
             return base64.b64encode(f.read()).decode("utf-8")
 
     def _consultar_nvidia_nim(self, ruta_imagen, tipo_juego):
         if not self.api_key:
-            print("[Agente 2] ⚠️ NVIDIA_API_KEY no detectada en .env o variables.")
+            print("[Agente 2] ⚠️ NVIDIA_API_KEY no detectada. Usando fallback de OCR Local.")
             return None
 
         b64_img = self._encode_image_b64(ruta_imagen)
-        img_prefix = "data:image/png;base64,"
 
         prompt_clasificacion = """
-        Eres un experto transcriptor de planillas de Tiro con Arco.
-        Analiza la imagen recortada de la planilla de CLASIFICACIÓN y extrae todos los números y textos visibles en este formato JSON exacto:
+        Eres un experto transcriptor de planillas de Tiro con Arco (FATARCO / World Archery).
+        Analiza el recorte de la planilla de CLASIFICACIÓN y extrae todos los datos en este formato JSON exacto:
         {
           "valido": true,
-          "arquero": "Nombre y Apellido",
-          "target": "Número y Letra de diana ej 1A o 8B",
-          "club": "Club o Federación",
-          "categoria": "Categoría ej Recurvo Senior",
+          "arquero": "Nombre y Apellido completo",
+          "target": "Número y Letra de diana ej 1A, 1B",
+          "club": "Sigla y Nombre del Club ej TCAP - Tiro con Arco Paraná A.D.",
+          "categoria": "Categoría exacta escrita en el recuadro ej R M, C M, B M, Recurvo Senior",
           "series": [
-            {"serie": 1, "flechas": [10, 9, 8], "suma_parcial": 27, "total_acumulado": 27},
-            {"serie": 2, "flechas": [10, 10, 9], "suma_parcial": 29, "total_acumulado": 56}
+            {
+              "serie": 1,
+              "flechas": ["X", 10, 9],
+              "suma_parcial_escrita": 29,
+              "total_acumulado_escrito": 29
+            }
           ],
-          "totales_planilla": {"total_puntos": 540, "cant_10s": 12, "cant_9s": 18}
+          "totales_planilla_escritos": {
+            "total_puntos": 540,
+            "cant_10s": 12,
+            "cant_9s": 18
+          }
         }
-        Si la imagen NO contiene una planilla válida, responde: {"valido": false}
-        Devuelve ÚNICAMENTE el objeto JSON sin texto introductorio ni bloques de código adicionales.
+        REGLAS CRÍTICAS DE TRANSCRIPCIÓN:
+        1. Las flechas válidas son números (1 al 10), la letra 'X' (centro del 10, vale 10 puntos) y la letra 'M' (Miss/Fallo, vale 0 puntos).
+        2. NO confundir jamás la letra 'M' con un '9'. Si la planilla indica 'M', escribe "M".
+        3. NO confundir la letra 'X' con un número inválido. La 'X' ES TOTALMENTE VÁLIDA y representa un 10. Consérvala como "X".
+        4. Extrae la suma parcial y total acumulado tal cual están escritos en el papel por el planillero.
+        5. Devuelve ÚNICAMENTE el JSON estricto.
         """
 
         prompt_eliminatoria = """
         Eres un experto transcriptor de planillas de Tiro con Arco.
-        Analiza la imagen recortada de la planilla de ELIMINATORIA (Duelo de Sets) y extrae todos los datos en este formato JSON exacto:
+        Analiza el recorte de la planilla de ELIMINATORIA (Duelo de Sets) y extrae todos los datos en este JSON exacto:
         {
           "valido": true,
           "arquero": "Nombre y Apellido",
-          "posicion": "Posición en el bracket ej Posición 1",
-          "club": "Club",
+          "posicion": "Posición en la llave ej Posición 1",
+          "club": "Sigla y Nombre del Club",
+          "categoria": "Categoría ej R M, B M",
           "sets": [
-            {"set": 1, "flechas": [10, 9, 9], "puntos_set": 2},
-            {"set": 2, "flechas": [9, 8, 8], "puntos_set": 0}
+            {"set": 1, "flechas": ["X", 9, "M"], "puntos_set_escritos": 2}
           ],
-          "total_set_points": 6,
-          "ganador": true,
-          "shoot_off": null
+          "total_set_points_escritos": 6,
+          "ganador": true
         }
-        Si la imagen NO contiene un duelo válido, responde: {"valido": false}
-        Devuelve ÚNICAMENTE el objeto JSON.
+        REGLAS:
+        1. Preservar 'X' (vale 10 puntos) y 'M' (vale 0 puntos) como cadenas.
+        2. Devuelve ÚNICAMENTE el JSON estricto.
         """
 
         prompt = prompt_eliminatoria if tipo_juego == "eliminatoria" else prompt_clasificacion
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
+        img_prefix = "data:image/png;base64,"
+        url = "https://integrate.api.nvidia.com/v1/chat/completions"
 
         for model in self.model_chain:
-            print(f"[Agente 2] 🚀 Consultando modelo NVIDIA NIM: {model}...")
-
-            # Soporte dual: Endpoint Nemotron Parse y Chat Completions estándar
-            if "parse" in model.lower():
-                url = "https://integrate.api.nvidia.com/v1/chat/completions"
-                payload = {
-                    "model": model,
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": prompt},
-                                {"type": "image_url", "image_url": {"url": img_prefix + b64_img}}
-                            ]
-                        }
-                    ],
-                    "temperature": 0.1,
-                    "max_tokens": 1024
-                }
-            else:
-                url = "https://integrate.api.nvidia.com/v1/chat/completions"
-                payload = {
-                    "model": model,
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": prompt},
-                                {"type": "image_url", "image_url": {"url": img_prefix + b64_img}}
-                            ]
-                        }
-                    ],
-                    "temperature": 0.1,
-                    "max_tokens": 1024
-                }
-
             try:
+                print(f"[Agente 2] 🚀 Consultando modelo NVIDIA NIM: {model}...")
+                headers = {
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "model": model,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": prompt},
+                                {"type": "image_url", "image_url": {"url": img_prefix + b64_img}}
+                            ]
+                        }
+                    ],
+                    "temperature": 0.1,
+                    "max_tokens": 1024
+                }
+
                 resp = requests.post(url, headers=headers, json=payload, timeout=90)
                 if resp.status_code == 200:
-                    print(f"[Agente 2] ✅ Respuesta exitosa recibida de {model}")
                     data = resp.json()
                     content = data["choices"][0]["message"]["content"]
                     match = re.search(r'\{.*\}', content, re.DOTALL)
                     if match:
                         parsed = json.loads(match.group(0))
                         parsed["modelo_usado"] = model
+                        print(f"[Agente 2] ✅ Respuesta exitosa de {model}")
                         return parsed
                 else:
-                    print(f"[Agente 2] ⚠️ {model} devolvió estado HTTP {resp.status_code}: {resp.text[:150]}")
+                    print(f"[Agente 2] ⚠️ Modelo {model} respondió con HTTP {resp.status_code}")
             except Exception as e:
                 print(f"[Agente 2] ⚠️ Excepción al consultar {model}: {e}")
                 continue
@@ -245,54 +225,122 @@ class Agente2OCRExtractor:
         print("[Agente 2] ❌ Ningún modelo de NVIDIA NIM respondió con éxito. Recurriendo a OCR Local.")
         return None
 
+    def _calcular_totales_y_cotejar(self, resultado):
+        """
+        Calcula matemáticamente los totales reales (donde X=10 y M=0)
+        y los coteja contra los valores escritos en la planilla.
+        """
+        if not resultado or not resultado.get("valido", True):
+            return resultado
+
+        series = resultado.get("series", [])
+        total_puntos_calc = 0
+        cant_10s_calc = 0
+        cant_9s_calc = 0
+
+        for s in series:
+            flechas = s.get("flechas", [])
+            suma_parcial_calc = 0
+            for f in flechas:
+                f_str = str(f).strip().upper()
+                if f_str == "X":
+                    suma_parcial_calc += 10
+                    cant_10s_calc += 1
+                elif f_str == "M":
+                    suma_parcial_calc += 0
+                elif f_str == "10":
+                    suma_parcial_calc += 10
+                    cant_10s_calc += 1
+                elif f_str == "9":
+                    suma_parcial_calc += 9
+                    cant_9s_calc += 1
+                elif f_str.isdigit():
+                    val = int(f_str)
+                    suma_parcial_calc += val
+                    if val == 10:
+                        cant_10s_calc += 1
+                    elif val == 9:
+                        cant_9s_calc += 1
+
+            total_puntos_calc += suma_parcial_calc
+            s["suma_parcial_calculada"] = suma_parcial_calc
+            s["total_acumulado_calculado"] = total_puntos_calc
+
+            escrita = s.get("suma_parcial_escrita")
+            if escrita is not None:
+                try:
+                    s["cotejo_serie_coincide"] = (int(escrita) == suma_parcial_calc)
+                except ValueError:
+                    s["cotejo_serie_coincide"] = False
+            else:
+                s["cotejo_serie_coincide"] = True
+
+        resultado["totales_planilla_calculados"] = {
+            "total_puntos": total_puntos_calc,
+            "cant_10s": cant_10s_calc,
+            "cant_9s": cant_9s_calc
+        }
+
+        escrito_total = resultado.get("totales_planilla_escritos", {}).get("total_puntos")
+        if escrito_total is not None:
+            try:
+                resultado["cotejo_total_coincide"] = (int(escrito_total) == total_puntos_calc)
+            except ValueError:
+                resultado["cotejo_total_coincide"] = False
+        else:
+            resultado["cotejo_total_coincide"] = True
+
+        return resultado
+
     def _fallback_tesseract_ocr(self, ruta_imagen, tipo_juego):
         if not OCR_SUPPORT or not os.path.exists(ruta_imagen):
-            diagnostico = "Tesseract no instalado" if not OCR_SUPPORT else f"Imagen no encontrada: {ruta_imagen}"
-            return {
+            res = {
                 "valido": True,
-                "arquero": f"Desconocido ({diagnostico})",
+                "arquero": "Desconocido (OCR Offline)",
                 "target": "N/A",
+                "club": "Detectado por OCR Local",
+                "categoria": "N/A",
                 "series": [],
-                "totales_planilla": {"total_puntos": 0, "cant_10s": 0, "cant_9s": 0},
+                "totales_planilla_escritos": {"total_puntos": 0, "cant_10s": 0, "cant_9s": 0},
                 "texto_raw_ocr": "",
-                "modelo_usado": "N/A"
+                "modelo_usado": "Tesseract-OCR-Local (Fallback)"
             }
+            return self._calcular_totales_y_cotejar(res)
 
-        try:
-            img_pil = Image.open(ruta_imagen)
-            text_raw = pytesseract.image_to_string(img_pil, lang="spa+eng")
-        except Exception as e:
-            text_raw = ""
+        img_pil = Image.open(ruta_imagen)
+        text_raw = pytesseract.image_to_string(img_pil, lang="spa+eng")
 
         numeros = re.findall(r'\d+', text_raw)
         dianas = re.findall(r'\d+[A-Da-d]', text_raw)
-
         lineas = [l.strip() for l in text_raw.splitlines() if len(l.strip()) > 3]
+
         nombre = lineas[0] if lineas else "Arquero Detectado"
         target_str = dianas[0].upper() if dianas else "N/A"
 
-        return {
+        res = {
             "valido": True,
             "arquero": nombre,
             "target": target_str,
             "club": "Detectado por OCR Local",
+            "categoria": "N/A",
             "series": [
                 {
                     "serie": i + 1,
                     "flechas": [int(n) for n in numeros[i*3:(i+1)*3]],
-                    "suma_parcial": sum([int(n) for n in numeros[i*3:(i+1)*3]]) if len(numeros[i*3:(i+1)*3]) == 3 else 0,
-                    "total_acumulado": 0
+                    "suma_parcial_escrita": sum([int(n) for n in numeros[i*3:(i+1)*3]]) if len(numeros[i*3:(i+1)*3]) == 3 else 0,
+                    "total_acumulado_escrito": 0
                 }
                 for i in range(min(10, len(numeros) // 3))
             ],
-            "totales_planilla": {
+            "totales_planilla_escritos": {
                 "total_puntos": sum([int(n) for n in numeros if int(n) <= 10]) if numeros else 0,
-                "cant_10s": text_raw.lower().count("10"),
+                "cant_10s": text_raw.lower().count("10") + text_raw.upper().count("X"),
                 "cant_9s": text_raw.lower().count("9")
             },
             "texto_raw_ocr": text_raw,
             "modelo_usado": "Tesseract-OCR-Local (Fallback)"
         }
+        return self._calcular_totales_y_cotejar(res)
 
     def procesar_manifiesto_agente1(self, manifiesto_agente1):
         tareas = manifiesto_agente1.get("tareas_agente2", [])
@@ -316,6 +364,8 @@ class Agente2OCRExtractor:
             resultado_ocr = self._consultar_nvidia_nim(ruta_procesada, tipo_juego)
             if not resultado_ocr or not resultado_ocr.get("valido", True):
                 resultado_ocr = self._fallback_tesseract_ocr(ruta_procesada, tipo_juego)
+            else:
+                resultado_ocr = self._calcular_totales_y_cotejar(resultado_ocr)
 
             item_transcripcion = {
                 "pagina": tarea.get("pagina"),
