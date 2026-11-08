@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🤖 Agente 1 (v9): Clasificador y Segmentador de Planillas Multi-Página de Tiro con Arco.
+🤖 Agente 1 (v11): Clasificador y Segmentador Multimodelo de Planillas de Tiro con Arco.
 
-Novedades v9:
-1. Desacoplamiento entre Número de Página y Número de Contención/Diana:
-   Las posiciones espaciales de la cuadrícula se denominan 'A', 'B', 'C', 'D' (Top-Left, Top-Right, Bottom-Left, Bottom-Right).
-   El número de contención real (ej: 14A, 12B, 3C) es un dato del encabezado que lee el Agente 2 mediante OCR.
-2. Extracción limpia de objetivos individuales si el nombre de archivo contiene la diana explícita (ej: 3B_crop.png).
-3. Segmentación y recorte físico 100% completo de TODAS las páginas de un PDF/Imagen antes de pasar a la etapa de OCR.
+Responsabilidades:
+1. Detectar y clasificar el TIPO DE PÁGINA:
+   - "info" / "portada": Carátula, horarios, reglamento o páginas sin cuadrículas de puntuación.
+   - "eliminatoria": Planillas de eliminatorias / duelos en paralelo (2 arqueros en enfrentamiento).
+   - "clasificacion": Planillas de ronda clasificatoria (4 arqueros, 2 arqueros o 1 arquero).
+2. Segmentar físicamente los cuadrantes según el layout detectado (Portada, Posición A, B, C, D).
+3. Generar manifiesto JSON estructurado para la Fase 2 (Agente 2 - OCR).
 """
 
 import os
@@ -45,40 +46,60 @@ class AgenteClasificadorSegmentador:
         # 1. Respetar selección manual del dropdown (Gradio)
         if tipo_juego_manual and tipo_juego_manual != "Auto":
             m = str(tipo_juego_manual).lower()
-            if "clasificacion_1" in m or "1_arquero" in m or "individual" in m:
+            if "info" in m or "portada" in m:
+                return "info", "portada"
+            elif "eliminatoria" in m or "duelo" in m or "2" in m:
+                return "eliminatoria", "2_arqueros"
+            elif "clasificacion_1" in m or "1_arquero" in m or "individual" in m:
                 return "clasificacion", "1_arquero"
+            elif "clasificacion_2" in m:
+                return "clasificacion", "2_arqueros"
             elif "clasificacion_4" in m or "4_arqueros" in m:
                 return "clasificacion", "4_arqueros"
-            elif "eliminatoria" in m or "2" in m or "duelo" in m:
-                return "eliminatoria", "2_arqueros"
 
         # 2. Reglas por Nombre de Archivo
+        if any(p in filename for p in ["portada", "caratula", "info", "informacion"]):
+            return "info", "portada"
+
+        if any(p in filename for p in ["eliminac", "duelo", "enfrentamiento", "2-arqueros", "2arqueros"]):
+            return "eliminatoria", "2_arqueros"
+
+        if any(p in filename for p in ["4-arqueros", "4arqueros"]):
+            return "clasificacion", "4_arqueros"
+
         pattern_1_arquero = r'^(1a|1b|1c|1d|2a|2b|2c|2d|3a|3b|3c|3d|[0-9]{1,2}[a-d])[_\-]|(crop|recorte|individual|1[-_]arquero|1arquero)'
         if re.search(pattern_1_arquero, filename):
             return "clasificacion", "1_arquero"
 
-        if re.search(r'4[-_]arqueros|4arqueros', filename):
-            return "clasificacion", "4_arqueros"
-
-        if re.search(r'2[-_]arqueros|2arqueros|eliminacion|duelo', filename):
-            return "eliminatoria", "2_arqueros"
-
-        # 3. Geometría e Inspección Visual de la Imagen
+        # 3. Geometría e Inspección Visual con OpenCV (Detección de Grillas y Líneas)
         pil_img = Image.open(ruta_imagen)
         w, h = pil_img.size
 
-        # Si es un recorte individual (ancho < 750px y alto < 850px)
+        img_np = np.array(pil_img.convert("RGB"))
+        gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
+        _, thresh = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY_INV)
+
+        kernel_h = cv2.getStructuringElement(cv2.MORPH_RECT, (max(15, int(w * 0.15)), 1))
+        lines_h = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel_h)
+        row_sums_h = np.sum(lines_h, axis=1).astype(float)
+        n_h = int(np.sum((np.diff((row_sums_h > w * 0.10).astype(int))) == 1))
+
+        cuerpo = thresh[int(h * 0.10):int(h * 0.90), int(w * 0.05):int(w * 0.95)]
+        densidad = float(np.mean(cuerpo)) / 255.0
+
+        # Si no tiene cuadrícula de planillas (pocos trazos horizontales o densidad mínima) -> "info" / "portada"
+        if n_h < 4 or densidad < 0.015:
+            return "info", "portada"
+
+        # Si es un recorte individual pequeño (<750x850) -> 1 arquero
         if w < 750 and h < 850:
             return "clasificacion", "1_arquero"
 
-        # Si es una página de escaneo completa / PDF (> 1000px) -> 4 arqueros
-        if w > 1000 and h > 1000:
-            return "clasificacion", "4_arqueros"
-
-        # Si es formato apaisado mediano -> 2 arqueros
+        # Formato apaisado (w > h) -> Eliminatoria (2 arqueros en duelo lado a lado)
         if w > h:
             return "eliminatoria", "2_arqueros"
 
+        # Por defecto para páginas completas de clasificación -> 4 arqueros
         return "clasificacion", "4_arqueros"
 
     def procesar_documento(self, ruta_archivo, tipo_juego_manual=None, page_overrides=None):
@@ -110,7 +131,6 @@ class AgenteClasificadorSegmentador:
         fn_global = os.path.basename(ruta_archivo)
         target_desde_nombre = extract_target_from_filename(fn_global)
 
-        # FASE 1: Recorte físico y estructuración completa por posición espacial
         for num_pag, img_path in paginas_imagenes:
             modo_manual = tipo_juego_manual
             if page_overrides and isinstance(page_overrides, dict):
@@ -120,7 +140,9 @@ class AgenteClasificadorSegmentador:
             img = Image.open(img_path)
             w, h = img.size
 
-            if layout == "4_arqueros":
+            if layout == "portada" or tipo_juego == "info":
+                cuadrantes_coords = {"Portada": (0, 0, w, h)}
+            elif layout == "4_arqueros":
                 cuadrantes_coords = {
                     "A": (0, 0, w // 2, h // 2),
                     "B": (w // 2, 0, w, h // 2),
@@ -142,12 +164,14 @@ class AgenteClasificadorSegmentador:
                 crop_path = os.path.join(self.output_dir, crop_filename)
                 crop_img.save(crop_path, "PNG")
 
+                label_str = f"Pág {num_pag} - Pos {target_pos}"
                 manifiesto["tareas_agente2"].append({
                     "pagina": num_pag,
                     "target_id": target_pos,
                     "tipo_juego": tipo_juego,
                     "layout": layout,
-                    "ruta_recorte": crop_path
+                    "ruta_recorte": crop_path,
+                    "label": label_str
                 })
 
         print(f"[Agente 1] ✂️ Completada la clasificación y segmentación de {len(paginas_imagenes)} página(s). Se generaron {len(manifiesto['tareas_agente2'])} recortes de dianas en total.")
