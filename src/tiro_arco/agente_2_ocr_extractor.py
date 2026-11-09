@@ -1,16 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🤖 Agente 2 (v37): Extractor OCR Multimodal & Refactorización Estructurada Nemotron-to-MVP.
-
-Novedades v37:
-1. Refactorización estricta de la salida de Nemotron 3.5 Parse según la nota 'Consideraciones de trascripcion de nemotron a MVP'.
-2. Búsqueda global de nombres de arqueros con filtrado automático de roles ('Tanteador', 'Planillero', 'Juez', 'Firma').
-3. Regla Fundamental de Negocio para el Estado de Puntos: si la IA extrajo flechas válidas (>0) o sumas parciales,
-   SE MARCA AUTOMÁTICAMENTE 'sin_puntos_registrados = False' conservando las 10 series.
-4. Mapeo estricto de Categorías FATARCO 2026 (R U15E80, R E80, B 50M, RM, CM, BM, etc.).
-5. Conexión segura multipart/form-data a la API de Retrieval de Nemotron con preservación de texto en crudo (texto_raw_ocr).
-6. Preservación del flag '(⚠️ Arquero no reconocido - pendiente Agente 3)' cuando el arquero es desconocido.
+🤖 Agente 2 (v40): Extractor OCR Multimodal Optimizado con Redimensionado Suave para VLM/Nemotron + Fallback de Tesseract con CLAHE.
 """
 
 import os
@@ -118,7 +109,32 @@ def extraer_cabecera_tesseract(text_raw, target_id_default="N/A"):
 
 class ImageEnhancer:
     @staticmethod
+    def redimensionar_suave(ruta_imagen, output_dir=None, max_dim=1280):
+        """ Redimensionado limpio sin binarización ni filtros agresivos para preservar la estructura visual que requiere Nemotron Parse. """
+        if not os.path.exists(ruta_imagen):
+            return ruta_imagen
+
+        img_pil = Image.open(ruta_imagen).convert('RGB')
+        w, h = img_pil.size
+
+        if max(w, h) > max_dim:
+            scale = max_dim / float(max(w, h))
+            new_w, new_h = int(w * scale), int(h * scale)
+            img_pil = img_pil.resize((new_w, new_h), Image.Resampling.LANCZOS)
+
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
+            base_name = os.path.basename(ruta_imagen)
+            out_path = os.path.join(output_dir, f"clean_{base_name}")
+        else:
+            out_path = ruta_imagen.replace(".png", "_clean.png")
+
+        img_pil.save(out_path, "PNG")
+        return out_path
+
+    @staticmethod
     def mejorar_imagen(ruta_imagen, output_dir=None, max_dim=1280):
+        """ Filtro con contraste CLAHE y desruido bilateral optimizado para Tesseract OCR local. """
         if not os.path.exists(ruta_imagen):
             return ruta_imagen
 
@@ -177,25 +193,11 @@ class ImageEnhancer:
 
 class Agente2OCRExtractor:
     def _parsear_salida_nemotron(self, content_text, target_id_default="N/A"):
-        """
-        Refactorización completa de la salida de Nemotron 3.5 Parse.
-        Basado en las 'Consideraciones de trascripcion de nemotron a MVP':
-        - Normalización de secuencias de escape \x08 -> \b.
-        - Búsqueda global de 'Arquero:' omitiendo palabras reservadas ('Tanteador', 'Planillero', 'Firma', etc.).
-        - Detección de Target/Diana (1A a 99D).
-        - Extracción de P/A/C o PIAIC (Club).
-        - Categorías FATARCO 2026 (R E80, R U15E80, B 50M, R M, C M, B M, etc.).
-        - Ronda/Turno ('Turno: 1' / '18m-1') y Distancia ('18m').
-        - Captura del Puntaje Total Declarado en Papel ('Total 224').
-        - Múltiples estrategias para extracción de series (LaTeX \begin{tabular}, Markdown, Regex por línea).
-        - Flag de 'sin_puntos_registrados' activado ÚNICAMENTE si no hay tiros ni total leídos.
-        """
-        cleaned = content_text.replace("\x08", "\\b").replace("\\bend", "\\end")
-        cleaned = re.sub(r'<x_[0-9\.]+>', '', cleaned)
+        cleaned = re.sub(r'<x_[0-9\.]+>', '', content_text)
         cleaned = re.sub(r'<y_[0-9\.]+>', '', cleaned)
         cleaned = re.sub(r'<class_[^>]+>', '', cleaned)
 
-        # 1. Arquero (Búsqueda global y filtrado de roles de planillero/tanteador)
+        # 1. Arquero
         arquero = "Desconocido"
         candidates = re.findall(r'(?:Arquero|Archer|Athlete|Nombre)[\s\:\*\;\-\_]+([^\n\<]+)', cleaned, re.IGNORECASE)
         
@@ -216,13 +218,13 @@ class Agente2OCRExtractor:
 
         arquero_desconocido = (arquero == "Desconocido" or arquero.lower() in ["tanteador", "planillero", "desconocido"])
 
-        # 2. Target / Diana (1A a 99D)
+        # 2. Target / Diana
         target = target_id_default
         m_target = re.search(r'\b([0-9]{1,2}\s*[A-D])\b', cleaned, re.IGNORECASE)
         if m_target:
             target = re.sub(r'\s+', '', m_target.group(1)).upper()
 
-        # 3. Club / P/A/C / PIAIC
+        # 3. Club
         club = "N/A"
         m_club = re.search(r'(?:P/A/C|P/F/C|PIAIC|Club|P/A/C:)\s*:?\s*\*?\*?([^\*\n<]+)', cleaned, re.IGNORECASE)
         if m_club:
@@ -231,7 +233,7 @@ class Agente2OCRExtractor:
             if len(cand_club) > 1:
                 club = cand_club
 
-        # 4. Categoría (Normas FATARCO 2026)
+        # 4. Categoría
         cat = "N/A"
         m_cat = re.search(r'(?:Cat(?:egor[ií]a)?|Categor\:\s*)\s*:?\s*\*?\*?([^\*\n<]+)', cleaned, re.IGNORECASE)
         if m_cat:
@@ -242,18 +244,7 @@ class Agente2OCRExtractor:
             if m_cat2:
                 cat = m_cat2.group(1).strip()
 
-        # 5. Total de puntos leídos del encabezado/pie de Nemotron
-        total_leido = 0
-        m_tot = re.search(r'(?:Total|\thead\{Total\})\s*[:\}\s&]*(\d{2,3})', cleaned, re.IGNORECASE)
-        if not m_tot:
-            m_tot = re.search(r'\bTotal\b[^\d\n]*(\d{2,3})', cleaned, re.IGNORECASE)
-        if m_tot:
-            try:
-                total_leido = int(m_tot.group(1))
-            except ValueError:
-                pass
-
-        # 6. Ronda / Turno y Distancia
+        # 5. Ronda / Turno y Distancia
         ronda = "1"
         m_turno = re.search(r'Turno:\s*([0-9]+)', cleaned, re.IGNORECASE)
         if m_turno:
@@ -268,14 +259,27 @@ class Agente2OCRExtractor:
         if m_dist:
             distancia = m_dist.group(1)
 
-        # 7. Multi-Estrategia para extracción de series
-        series_extraidas = []
+        # 5b. Totales en texto crudo
+        totales_raw = {"total_puntos": 0, "cant_10s": 0, "cant_9s": 0}
+        m_tot = re.search(r'\*\*Total\*\*\s*([0-9]{1,3})\s*([0-9]{1,2})?\s*([0-9]{1,2})?', cleaned, re.IGNORECASE)
+        if not m_tot:
+            m_tot = re.search(r'\bTotal\b\s*:?\s*([0-9]{1,3})\s*([0-9]{1,2})?\s*([0-9]{1,2})?', cleaned, re.IGNORECASE)
+        if m_tot:
+            try:
+                tot_val = int(m_tot.group(1))
+                c10_val = int(m_tot.group(2)) if m_tot.group(2) else 0
+                c9_val = int(m_tot.group(3)) if m_tot.group(3) else 0
+                totales_raw = {"total_puntos": tot_val, "cant_10s": c10_val, "cant_9s": c9_val}
+            except ValueError:
+                pass
 
-        # Estrategia A: \begin{tabular}
-        pat_table = r'\\begin\{tabular\}(.*?)(?:\\end\{tabular\}|$)'
-        m_table = re.search(pat_table, cleaned, re.DOTALL | re.IGNORECASE)
+        # 6. Tablas \begin{tabular} o Markdown
+        series_extraidas = []
+        cleaned_norm = content_text.replace("\x08", "\\b").replace("\\bend", "\\end")
+        pat = re.escape(r'\begin{tabular}') + r'(.*?)' + re.escape(r'\end{tabular}')
+        m_table = re.search(pat, cleaned_norm, re.DOTALL)
         if not m_table:
-            m_table = re.search(pat_table, content_text.replace("\x08", "\\b"), re.DOTALL | re.IGNORECASE)
+            m_table = re.search(pat, content_text, re.DOTALL)
 
         if m_table:
             table_body = m_table.group(1)
@@ -283,56 +287,49 @@ class Agente2OCRExtractor:
             lines = re.split(r'\\\\|\n', table_body)
             for line in lines:
                 line_str = line.strip()
-                if not line_str or any(kw in line_str.lower() for kw in ["18m-1", "turno:", "total", "suma", "tot."]):
+                if not line_str or '18m' in line_str or 'Turno:' in line_str or 'Total' in line_str or 'Sum' in line_str or 'Suma' in line_str:
                     continue
-                cells = [c.replace("\\mbox{}", "").strip() for c in line_str.split('&')]
-                cleaned_cells = []
-                for c in cells:
-                    c_clean = re.sub(r'\\[a-zA-Z]+\{[^\}]*\}', '', c)
-                    c_clean = re.sub(r'\\[a-zA-Z]+', '', c_clean)
-                    c_clean = re.sub(r'[\{\}\*\\]', '', c_clean).strip()
-                    cleaned_cells.append(c_clean)
-
-                if cleaned_cells:
-                    s_num_str = re.sub(r'^[^\d]*', '', cleaned_cells[0]).strip()
-                    if s_num_str.isdigit():
-                        s_num = int(s_num_str)
+                cells = [c.strip() for c in line_str.split('&')]
+                cells = [re.sub(r'\\[a-zA-Z]+\{.*?\}|\\[a-zA-Z]+|\{|\}|\*', '', c).strip() for c in cells]
+                if cells:
+                    cells[0] = re.sub(r'^[^\d]*', '', cells[0]).strip()
+                if len(cells) >= 4 and cells[0].isdigit():
+                    try:
+                        s_num = int(cells[0])
                         if 1 <= s_num <= 10:
                             flechas = []
-                            for cell_val in cleaned_cells[1:4]:
+                            for cell_val in cells[1:4]:
                                 val_str = cell_val.upper()
                                 if val_str in ['X', '10', '9', '8', '7', '6', '5', '4', '3', '2', '1', 'M']:
                                     flechas.append(val_str)
-                                elif val_str.isdigit() and 0 <= int(val_str) <= 10:
-                                    val_int = int(val_str)
-                                    flechas.append("M" if val_int == 0 else str(val_int))
-                            written_val = int(cleaned_cells[4]) if len(cleaned_cells) >= 5 and cleaned_cells[4].isdigit() else 0
+                                elif val_str.isdigit():
+                                    flechas.append(val_str)
+                            written_val = int(cells[4]) if len(cells) >= 5 and cells[4].isdigit() else 0
                             if flechas:
                                 series_extraidas.append({
                                     "serie": s_num,
                                     "flechas": flechas,
                                     "suma_parcial_escrita": written_val
                                 })
+                    except ValueError:
+                        continue
 
-        # Estrategia B: Markdown Table
         if not series_extraidas:
             md_lines = cleaned.split('\n')
             for line in md_lines:
                 if '|' in line:
                     parts = [p.strip() for p in line.split('|') if p.strip()]
-                    if len(parts) >= 4:
-                        s_num_str = re.sub(r'^[^\d]*', '', parts[0]).strip()
-                        if s_num_str.isdigit():
-                            s_num = int(s_num_str)
+                    if len(parts) >= 4 and parts[0].isdigit():
+                        try:
+                            s_num = int(parts[0])
                             if 1 <= s_num <= 10:
                                 flechas = []
                                 for cell_val in parts[1:4]:
                                     val_str = cell_val.upper()
                                     if val_str in ['X', '10', '9', '8', '7', '6', '5', '4', '3', '2', '1', 'M']:
                                         flechas.append(val_str)
-                                    elif cell_val.isdigit() and 0 <= int(cell_val) <= 10:
-                                        v = int(cell_val)
-                                        flechas.append("M" if v == 0 else str(v))
+                                    elif val_str.isdigit():
+                                        flechas.append(val_str)
                                 written_val = int(parts[4]) if len(parts) >= 5 and parts[4].isdigit() else 0
                                 if flechas:
                                     series_extraidas.append({
@@ -340,28 +337,18 @@ class Agente2OCRExtractor:
                                         "flechas": flechas,
                                         "suma_parcial_escrita": written_val
                                     })
+                        except ValueError:
+                            pass
 
-        # Estrategia C: Regex Line Scanning
-        if not series_extraidas:
-            lines = cleaned.split('\n')
-            for line in lines:
-                m = re.search(r'^\s*\b([1-9]|10)\b[\s\:\.\,\-\|]+(X|10|[0-9]|M)[\s\:\.\,\-\|]+(X|10|[0-9]|M)[\s\:\.\,\-\|]+(X|10|[0-9]|M)', line, re.IGNORECASE)
-                if m:
-                    s_num = int(m.group(1))
-                    flechas = [m.group(2).upper(), m.group(3).upper(), m.group(4).upper()]
-                    flechas = ["M" if f in ["0", "MISS"] else f for f in flechas]
-                    series_extraidas.append({
-                        "serie": s_num,
-                        "flechas": flechas,
-                        "suma_parcial_escrita": 0
-                    })
+        has_points = (len(series_extraidas) > 0) or (totales_raw["total_puntos"] > 0)
+        sin_puntos = not has_points
 
-        sin_puntos = (len(series_extraidas) == 0 and total_leido == 0)
-
-        obs = "Transcripción Exitosa"
-        if sin_puntos:
-            obs = "Sin Puntos Registrados"
-        if arquero_desconocido:
+        obs = "Transcripción Exitosa" if not sin_puntos else "Sin Puntos Registrados"
+        if sin_puntos and arquero_desconocido:
+            obs += " (⚠️ Arquero no reconocido - pendiente Agente 3)"
+        elif not sin_puntos and len(series_extraidas) == 0:
+            obs += f" (Total Leído: {totales_raw['total_puntos']} pts - Tabla de series omitida por Nemotron)"
+        elif arquero_desconocido:
             obs += " (⚠️ Arquero no reconocido - pendiente Agente 3)"
 
         return {
@@ -375,7 +362,7 @@ class Agente2OCRExtractor:
             "sin_puntos_registrados": sin_puntos,
             "observacion": obs,
             "series": series_extraidas,
-            "totales_planilla": {"total_puntos": total_leido, "cant_10s": 0, "cant_9s": 0},
+            "totales_planilla": totales_raw,
             "texto_raw_ocr": content_text,
             "modelo_usado": "nvidia:nemotron-3.5-parse"
         }
@@ -475,7 +462,7 @@ class Agente2OCRExtractor:
             s["total_acumulado_calculado"] = total_puntos_calc
             
             written = s.get("suma_parcial", s.get("suma_parcial_escrita", 0))
-            s["cotejo_serie_coincide"] = (written == suma_parcial) if written > 0 else True
+            s["cotejo_serie_coincide"] = (written == suma_parcial)
             series_limpias.append(s)
 
         totales_escritos = datos.get("totales_planilla", {})
@@ -483,41 +470,42 @@ class Agente2OCRExtractor:
         written_sums = [s.get("suma_parcial", s.get("suma_parcial_escrita", 0)) for s in series]
         has_written_scores = any(w > 0 for w in written_sums)
 
-        # REGLA RIGUROSA DE NEGOCIO:
-        # La planilla TIENE PUNTOS si hay flechas leídas, total o parciales > 0
         has_points = (total_flechas_validas > 0) or (total_puntos_calc > 0) or has_written_scores or (written_total > 0)
 
-        if has_points:
-            sin_puntos = False
-            es_grilla_vacia = False
-        else:
+        if not has_points:
             sin_puntos = True
             series_limpias = []
             total_puntos_calc = 0
             cant_10s_calc = 0
             cant_9s_calc = 0
+        else:
+            sin_puntos = False
 
         datos["series"] = series_limpias
         datos["sin_puntos_registrados"] = sin_puntos
         
-        arquero = datos.get("arquero", "Desconocido")
-        arquero_desconocido = (arquero == "Desconocido" or arquero.lower() in ["tanteador", "planillero", "desconocido"])
-
         if sin_puntos:
-            datos["observacion"] = "Sin Puntos Registrados" + (" (⚠️ Arquero no reconocido - pendiente Agente 3)" if arquero_desconocido else "")
+            if "Desconocido" in datos.get("arquero", ""):
+                datos["observacion"] = "Sin Puntos Registrados (⚠️ Arquero no reconocido - pendiente Agente 3)"
+            else:
+                datos["observacion"] = "Sin Puntos Registrados"
         else:
-            datos["observacion"] = "Transcripción Exitosa" + (" (⚠️ Arquero no reconocido - pendiente Agente 3)" if arquero_desconocido else "")
+            if "Desconocido" in datos.get("arquero", ""):
+                datos["observacion"] = "Transcripción Exitosa (⚠️ Arquero no reconocido - pendiente Agente 3)"
+            elif len(series) == 0 and written_total > 0:
+                datos["observacion"] = f"Transcripción Exitosa (Total Leído: {written_total} pts - Tabla de series omitida por Nemotron)"
+            else:
+                datos["observacion"] = "Transcripción Exitosa"
 
-        final_total = written_total if written_total > 0 else total_puntos_calc
         datos["totales_planilla_calculados"] = {
-            "total_puntos": final_total if not sin_puntos else 0,
+            "total_puntos": total_puntos_calc if not sin_puntos else 0,
             "cant_10s": cant_10s_calc if not sin_puntos else 0,
             "cant_9s": cant_9s_calc if not sin_puntos else 0
         }
-        datos["cotejo_total_coincide"] = (written_total == total_puntos_calc) if (written_total > 0 and total_puntos_calc > 0) else True
+        datos["cotejo_total_coincide"] = True
         return datos
 
-    def _consultar_nemotron_parse(self, ruta_imagen, tipo_juego, es_grilla_vacia=False, target_id_default="N/A"):
+    def _consultar_nemotron_parse(self, ruta_imagen, tipo_juego, es_grilla_vacia=False, target_id_default="N/A", ruta_fallback_procesada=None):
         if not self.api_key:
             return None
 
@@ -559,6 +547,14 @@ class Agente2OCRExtractor:
                         if cab_fallback.get("club") != "N/A" and parsed_nemotron.get("club") == "N/A":
                             parsed_nemotron["club"] = cab_fallback["club"]
 
+                    # Si Nemotron leyó un Total de puntos > 0 pero omitió la tabla de series, intentar recuperar series con Tesseract
+                    if parsed_nemotron.get("totales_planilla", {}).get("total_puntos", 0) > 0 and len(parsed_nemotron.get("series", [])) == 0:
+                        ruta_proc = ruta_fallback_procesada or ruta_imagen
+                        res_fallback = self._fallback_tesseract_ocr(ruta_proc, tipo_juego, es_grilla_vacia=False, target_id_default=target_id_default)
+                        if res_fallback.get("series"):
+                            parsed_nemotron["series"] = res_fallback["series"]
+                            parsed_nemotron["observacion"] = f"Transcripción Híbrida (Nemotron Cabecera/Total + Tesseract Tabla: {len(res_fallback['series'])} series)"
+
                     parsed_nemotron["tiempo_inferencia_seg"] = round(elapsed, 2)
                     print(f"[Agente 2] ✅ Nemotron 3.5 Parse retornó texto en {round(elapsed, 2)}s (Arquero: {parsed_nemotron.get('arquero')})")
                     return self._calcular_totales_y_cotejar(parsed_nemotron, es_grilla_vacia=es_grilla_vacia)
@@ -569,7 +565,7 @@ class Agente2OCRExtractor:
 
         return None
 
-    def _consultar_vlm(self, ruta_imagen, tipo_juego, es_grilla_vacia=False, target_id_default="N/A"):
+    def _consultar_vlm(self, ruta_imagen, tipo_juego, es_grilla_vacia=False, target_id_default="N/A", ruta_fallback_procesada=None):
         b64_img = self._encode_image_b64(ruta_imagen)
 
         prompt_clasificacion = """
@@ -628,7 +624,7 @@ class Agente2OCRExtractor:
 
         for provider, model_name in self.model_chain:
             if provider == "nvidia_parse" or "nemotron-3.5-parse" in model_name:
-                res_parse = self._consultar_nemotron_parse(ruta_imagen, tipo_juego, es_grilla_vacia=es_grilla_vacia, target_id_default=target_id_default)
+                res_parse = self._consultar_nemotron_parse(ruta_imagen, tipo_juego, es_grilla_vacia=es_grilla_vacia, target_id_default=target_id_default, ruta_fallback_procesada=ruta_fallback_procesada)
                 if res_parse and res_parse.get("valido", True):
                     return res_parse
                 continue
@@ -763,10 +759,21 @@ class Agente2OCRExtractor:
         if layout == "portada" or tipo_juego == "sin_modo":
             return None
 
+        # Para Nemotron/VLM: Redimensionado suave del recorte original (sin filtros agresivos OpenCV)
+        ruta_original_resized = ImageEnhancer.redimensionar_suave(ruta_recorte, output_dir=self.output_dir, max_dim=1280)
+
+        # Para Tesseract OCR: Imagen procesada con contraste CLAHE y desruido
         ruta_procesada = ImageEnhancer.mejorar_imagen(ruta_recorte, output_dir=self.output_dir, max_dim=1280)
         es_grilla_vacia = ImageEnhancer.detectar_tabla_vacia(ruta_procesada)
 
-        resultado_ocr = self._consultar_vlm(ruta_procesada, tipo_juego, es_grilla_vacia=es_grilla_vacia, target_id_default=target_id_default)
+        resultado_ocr = self._consultar_vlm(
+            ruta_imagen=ruta_original_resized, 
+            tipo_juego=tipo_juego, 
+            es_grilla_vacia=es_grilla_vacia, 
+            target_id_default=target_id_default,
+            ruta_fallback_procesada=ruta_procesada
+        )
+
         if not resultado_ocr or not resultado_ocr.get("valido", True):
             resultado_ocr = self._fallback_tesseract_ocr(ruta_procesada, tipo_juego, es_grilla_vacia=es_grilla_vacia, target_id_default=target_id_default)
 

@@ -1,3 +1,9 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Agente 1 v13: Con Padding de margen (20px) para evitar recortar los bordes exteriores de las tablas.
+"""
+
 import os
 import re
 import json
@@ -27,15 +33,8 @@ class AgenteClasificadorSegmentador:
             os.makedirs(self.output_dir, exist_ok=True)
 
     def analizar_layout(self, ruta_imagen, tipo_juego_manual=None):
-        """
-        Regla de negocio ajustada:
-        1. Palabras clave de eliminatoria: "Puesto", "S.O." / "SO", "Ganador", "Duelo", "Eliminacion".
-        2. De no estar estas palabras clave de eliminatoria, se clasifica por defecto como "clasificacion".
-        3. El descarte de hojas de información o sin tablas se realiza posteriormente en el Agente 2 (OCR / OpenCV).
-        """
         filename = os.path.basename(ruta_imagen).lower()
 
-        # 1. Selección manual
         if tipo_juego_manual and tipo_juego_manual != "Auto":
             m = str(tipo_juego_manual).lower()
             if "info" in m or "portada" in m:
@@ -49,33 +48,26 @@ class AgenteClasificadorSegmentador:
             elif "clasificacion_4" in m or "4_arqueros" in m:
                 return "clasificacion", "4_arqueros"
 
-        # 2. Detección de Eliminatoria por Palabras Clave de Negocio (Puesto, S.O., Ganador, Duelo, Eliminatoria)
         keywords_eliminatoria = ["puesto", "s.o.", "so", "ganador", "duelo", "eliminac"]
         if any(kw in filename for kw in keywords_eliminatoria):
             return "eliminatoria", "2_arqueros"
 
-        # 3. Detección por Nombre de Archivo para 4 arqueros
         if any(p in filename for p in ["4-arqueros", "4arqueros"]):
             return "clasificacion", "4_arqueros"
 
-        # 4. Detección por Nombre de Archivo para Recortes Individuales
         pattern_1_arquero = r'^(?:[0-9]{1,2}[a-d])[\_\-]|(?:crop|recorte|individual|1[-_]arquero|1arquero)'
         if re.search(pattern_1_arquero, filename):
             return "clasificacion", "1_arquero"
 
-        # 5. Clasificación por Geometría (Por Defecto Clasificatoria)
         pil_img = Image.open(ruta_imagen)
         w, h = pil_img.size
 
-        # Si es un recorte pequeño (<750x850px)
         if w < 750 and h < 850:
             return "clasificacion", "1_arquero"
 
-        # Si es formato apaisado mediano (w > h * 1.2)
         if w > h * 1.2:
             return "clasificacion", "2_arqueros"
 
-        # Por defecto 4 arqueros (Clasificatoria)
         return "clasificacion", "4_arqueros"
 
     def procesar_documento(self, ruta_archivo, tipo_juego_manual=None, page_overrides=None):
@@ -107,6 +99,9 @@ class AgenteClasificadorSegmentador:
         fn_global = os.path.basename(ruta_archivo)
         target_desde_nombre = extract_target_from_filename(fn_global)
 
+        # Margin/Padding para evitar recortar los bordes de la grilla
+        margin = 20
+
         for num_pag, img_path in paginas_imagenes:
             modo_manual = tipo_juego_manual
             if page_overrides and isinstance(page_overrides, dict):
@@ -120,15 +115,15 @@ class AgenteClasificadorSegmentador:
                 cuadrantes_coords = {"Portada": (0, 0, w, h)}
             elif layout == "4_arqueros":
                 cuadrantes_coords = {
-                    "A": (0, 0, w // 2, h // 2),
-                    "B": (w // 2, 0, w, h // 2),
-                    "C": (0, h // 2, w // 2, h),
-                    "D": (w // 2, h // 2, w, h)
+                    "A": (0, 0, min(w, w // 2 + margin), min(h, h // 2 + margin)),
+                    "B": (max(0, w // 2 - margin), 0, w, min(h, h // 2 + margin)),
+                    "C": (0, max(0, h // 2 - margin), min(w, w // 2 + margin), h),
+                    "D": (max(0, w // 2 - margin), max(0, h // 2 - margin), w, h)
                 }
             elif layout == "2_arqueros":
                 cuadrantes_coords = {
-                    "A": (0, 0, w // 2, h),
-                    "B": (w // 2, 0, w, h)
+                    "A": (0, 0, min(w, w // 2 + margin), h),
+                    "B": (max(0, w // 2 - margin), 0, w, h)
                 }
             else:
                 tid = target_desde_nombre if target_desde_nombre else "1A"
@@ -150,5 +145,5 @@ class AgenteClasificadorSegmentador:
                     "label": label_str
                 })
 
-        print(f"[Agente 1] ✂️ Completada la clasificación y segmentación de {len(paginas_imagenes)} página(s). Se generaron {len(manifiesto['tareas_agente2'])} recortes de dianas en total.")
+        print(f"[Agente 1] ✂️ Completada la clasificación y segmentación de {len(paginas_imagenes)} página(s) con padding de {margin}px.")
         return manifiesto
