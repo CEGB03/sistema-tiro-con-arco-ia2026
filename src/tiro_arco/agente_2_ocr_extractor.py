@@ -261,7 +261,9 @@ class Agente2OCRExtractor:
 
         # 5b. Totales en texto crudo
         totales_raw = {"total_puntos": 0, "cant_10s": 0, "cant_9s": 0}
-        m_tot = re.search(r'\*\*Total\*\*\s*([0-9]{1,3})\s*([0-9]{1,2})?\s*([0-9]{1,2})?', cleaned, re.IGNORECASE)
+        m_tot = re.search(r"\\multicolumn\{.*?\}\{.*?(?:Total|\*\*Total\*\*).*?\}\s*&\s*([0-9]{1,3})\s*&\s*([0-9]{1,2})?\s*&\s*([0-9]{1,2})?", content_text, re.IGNORECASE)
+        if not m_tot:
+            m_tot = re.search(r'\*\*Total\*\*\s*([0-9]{1,3})\s*([0-9]{1,2})?\s*([0-9]{1,2})?', cleaned, re.IGNORECASE)
         if not m_tot:
             m_tot = re.search(r'\bTotal\b\s*:?\s*([0-9]{1,3})\s*([0-9]{1,2})?\s*([0-9]{1,2})?', cleaned, re.IGNORECASE)
         if m_tot:
@@ -299,14 +301,11 @@ class Agente2OCRExtractor:
                         if 1 <= s_num <= 10:
                             flechas = []
                             for cell_val in cells[1:4]:
-                                val_str = cell_val.upper()
-                                if val_str in ['X', '10', '9', '8', '7', '6', '5', '4', '3', '2', '1', 'M']:
-                                    flechas.append(val_str)
-                                elif val_str.isdigit():
+                                val_str = cell_val.strip().upper()
+                                if val_str and val_str not in ['\\MBOX{}', 'MBOX', '{}']:
                                     flechas.append(val_str)
                             written_val = int(cells[4]) if len(cells) >= 5 and cells[4].isdigit() else 0
-                            if flechas:
-                                series_extraidas.append({
+                            series_extraidas.append({
                                     "serie": s_num,
                                     "flechas": flechas,
                                     "suma_parcial_escrita": written_val
@@ -331,8 +330,7 @@ class Agente2OCRExtractor:
                                     elif val_str.isdigit():
                                         flechas.append(val_str)
                                 written_val = int(parts[4]) if len(parts) >= 5 and parts[4].isdigit() else 0
-                                if flechas:
-                                    series_extraidas.append({
+                                series_extraidas.append({
                                         "serie": s_num,
                                         "flechas": flechas,
                                         "suma_parcial_escrita": written_val
@@ -447,12 +445,13 @@ class Agente2OCRExtractor:
                         flechas_normalizadas.append(s_str)
                         try:
                             v = int(s_str)
-                            suma_parcial += v
-                            total_flechas_validas += 1
-                            if v == 10:
-                                cant_10s_calc += 1
-                            elif v == 9:
-                                cant_9s_calc += 1
+                            if 0 <= v <= 10:
+                                suma_parcial += v
+                                total_flechas_validas += 1
+                                if v == 10:
+                                    cant_10s_calc += 1
+                                elif v == 9:
+                                    cant_9s_calc += 1
                         except ValueError:
                             pass
 
@@ -502,7 +501,15 @@ class Agente2OCRExtractor:
             "cant_10s": cant_10s_calc if not sin_puntos else 0,
             "cant_9s": cant_9s_calc if not sin_puntos else 0
         }
-        datos["cotejo_total_coincide"] = True
+        
+        # Cotejo dinámico entre el Total Calculado de las Series y el Total Oficial de la Planilla
+        if sin_puntos:
+            datos["cotejo_total_coincide"] = True
+        elif written_total > 0:
+            datos["cotejo_total_coincide"] = (total_puntos_calc == written_total)
+        else:
+            datos["cotejo_total_coincide"] = True
+            
         return datos
 
     def _consultar_nemotron_parse(self, ruta_imagen, tipo_juego, es_grilla_vacia=False, target_id_default="N/A", ruta_fallback_procesada=None):
