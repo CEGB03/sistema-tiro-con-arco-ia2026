@@ -1,17 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-🤖 Agente 1 (v11): Clasificador y Segmentador Multimodelo de Planillas de Tiro con Arco.
-
-Responsabilidades:
-1. Detectar y clasificar el TIPO DE PÁGINA:
-   - "info" / "portada": Carátula, horarios, reglamento o páginas sin cuadrículas de puntuación.
-   - "eliminatoria": Planillas de eliminatorias / duelos en paralelo (2 arqueros en enfrentamiento).
-   - "clasificacion": Planillas de ronda clasificatoria (4 arqueros, 2 arqueros o 1 arquero).
-2. Segmentar físicamente los cuadrantes según el layout detectado (Portada, Posición A, B, C, D).
-3. Generar manifiesto JSON estructurado para la Fase 2 (Agente 2 - OCR).
-"""
-
 import os
 import re
 import json
@@ -41,9 +27,15 @@ class AgenteClasificadorSegmentador:
             os.makedirs(self.output_dir, exist_ok=True)
 
     def analizar_layout(self, ruta_imagen, tipo_juego_manual=None):
+        """
+        Regla de negocio ajustada:
+        1. Palabras clave de eliminatoria: "Puesto", "S.O." / "SO", "Ganador", "Duelo", "Eliminacion".
+        2. De no estar estas palabras clave de eliminatoria, se clasifica por defecto como "clasificacion".
+        3. El descarte de hojas de información o sin tablas se realiza posteriormente en el Agente 2 (OCR / OpenCV).
+        """
         filename = os.path.basename(ruta_imagen).lower()
 
-        # 1. Respetar selección manual del dropdown (Gradio)
+        # 1. Selección manual
         if tipo_juego_manual and tipo_juego_manual != "Auto":
             m = str(tipo_juego_manual).lower()
             if "info" in m or "portada" in m:
@@ -57,49 +49,33 @@ class AgenteClasificadorSegmentador:
             elif "clasificacion_4" in m or "4_arqueros" in m:
                 return "clasificacion", "4_arqueros"
 
-        # 2. Reglas por Nombre de Archivo
-        if any(p in filename for p in ["portada", "caratula", "info", "informacion"]):
-            return "info", "portada"
-
-        if any(p in filename for p in ["eliminac", "duelo", "enfrentamiento", "2-arqueros", "2arqueros"]):
+        # 2. Detección de Eliminatoria por Palabras Clave de Negocio (Puesto, S.O., Ganador, Duelo, Eliminatoria)
+        keywords_eliminatoria = ["puesto", "s.o.", "so", "ganador", "duelo", "eliminac"]
+        if any(kw in filename for kw in keywords_eliminatoria):
             return "eliminatoria", "2_arqueros"
 
+        # 3. Detección por Nombre de Archivo para 4 arqueros
         if any(p in filename for p in ["4-arqueros", "4arqueros"]):
             return "clasificacion", "4_arqueros"
 
-        pattern_1_arquero = r'^(1a|1b|1c|1d|2a|2b|2c|2d|3a|3b|3c|3d|[0-9]{1,2}[a-d])[_\-]|(crop|recorte|individual|1[-_]arquero|1arquero)'
+        # 4. Detección por Nombre de Archivo para Recortes Individuales
+        pattern_1_arquero = r'^(?:[0-9]{1,2}[a-d])[\_\-]|(?:crop|recorte|individual|1[-_]arquero|1arquero)'
         if re.search(pattern_1_arquero, filename):
             return "clasificacion", "1_arquero"
 
-        # 3. Geometría e Inspección Visual con OpenCV (Detección de Grillas y Líneas)
+        # 5. Clasificación por Geometría (Por Defecto Clasificatoria)
         pil_img = Image.open(ruta_imagen)
         w, h = pil_img.size
 
-        img_np = np.array(pil_img.convert("RGB"))
-        gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
-        _, thresh = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY_INV)
-
-        kernel_h = cv2.getStructuringElement(cv2.MORPH_RECT, (max(15, int(w * 0.15)), 1))
-        lines_h = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel_h)
-        row_sums_h = np.sum(lines_h, axis=1).astype(float)
-        n_h = int(np.sum((np.diff((row_sums_h > w * 0.10).astype(int))) == 1))
-
-        cuerpo = thresh[int(h * 0.10):int(h * 0.90), int(w * 0.05):int(w * 0.95)]
-        densidad = float(np.mean(cuerpo)) / 255.0
-
-        # Si no tiene cuadrícula de planillas (pocos trazos horizontales o densidad mínima) -> "info" / "portada"
-        if n_h < 4 or densidad < 0.015:
-            return "info", "portada"
-
-        # Si es un recorte individual pequeño (<750x850) -> 1 arquero
+        # Si es un recorte pequeño (<750x850px)
         if w < 750 and h < 850:
             return "clasificacion", "1_arquero"
 
-        # Formato apaisado (w > h) -> Eliminatoria (2 arqueros en duelo lado a lado)
-        if w > h:
-            return "eliminatoria", "2_arqueros"
+        # Si es formato apaisado mediano (w > h * 1.2)
+        if w > h * 1.2:
+            return "clasificacion", "2_arqueros"
 
-        # Por defecto para páginas completas de clasificación -> 4 arqueros
+        # Por defecto 4 arqueros (Clasificatoria)
         return "clasificacion", "4_arqueros"
 
     def procesar_documento(self, ruta_archivo, tipo_juego_manual=None, page_overrides=None):
@@ -155,7 +131,7 @@ class AgenteClasificadorSegmentador:
                     "B": (w // 2, 0, w, h)
                 }
             else:
-                tid = target_desde_nombre if target_desde_nombre else "A"
+                tid = target_desde_nombre if target_desde_nombre else "1A"
                 cuadrantes_coords = {tid: (0, 0, w, h)}
 
             for target_pos, coords in cuadrantes_coords.items():

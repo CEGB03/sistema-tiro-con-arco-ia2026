@@ -12,7 +12,7 @@ sistema-tiro-con-arco-ia2026/
 ├── src/ ← Código fuente modular del proyecto
 │    ├── __init__.py 
 │    ├── agente_1_clasificador_segmentador.py ← Agente 1 (Segmentación visual OpenCV/Pillow)
-│    ├── ocr_tiro_con_arco.py ← Motor de extracción OCR (NVIDIA NIM) 
+│    ├── agente_2_ocr_extractor.py ← Agente 2
 │    └── app_tiro_con_arco.py ← Interfaz principal / Orquestador Gradio
 ├── notebooks/ ← Pruebas de exploración / evaluación 
 │    └── exploracion_y_evaluacion_ocr.ipynb 
@@ -32,30 +32,74 @@ sistema-tiro-con-arco-ia2026/
      ├── img/ ← Capturas de pantalla de la interfaz Gradio y diagramas 
      └── assets/ ← CSS/JS auxiliares para la web estática
 ```
+---
 
-### 🛠️ Instalación y Gestión de Dependencias con `uv`
+## 🚀 Método de Ejecución Recomendado con Docker (Orquestado)
 
-El proyecto utiliza **`uv`** para la gestión rápida y reproducible del entorno virtual y las dependencias:
+El proyecto está contenerizado para garantizar la portabilidad y evitar la instalación manual de dependencias del sistema operativo (como OpenCV o Tesseract OCR).
 
-```shell
-# Sincronizar el entorno e instalar dependencias del proyecto
-uv sync
+### 1. Requisitos Previos
+* Docker Desktop o Docker Engine con Docker Compose V2.
+
+### 2. Construir e Iniciar los Contenedores
+En la raíz de tu repositorio, ejecutá:
+
+```bash
+docker compose up -d --build
 ```
 
-> [!CAUTION]
-> Se requiere tener configurada la variable `NVIDIA_API_KEY` en el archivo `.env` local (se puede obtener gratuitamente en el portal de NVIDIA NIM).
+Esto iniciará dos servicios interconectados en una red interna privada:
+* **`archery_multiagent_app`**: Servidor Gradio y pipeline multi-agente en el puerto `7860`.
+* **`archery_ollama_ocr`**: Motor local de modelos de visión en el puerto `11434`.
+
+### 3. Descargar el Modelo de Visión en Ollama Local
+Para habilitar la inferencia visual 100% privada y local sin depender de la nube, ejecutá en tu terminal:
+
+```bash
+docker exec -it archery_ollama_ocr ollama pull qwen2-vl
+```
+
+*(Opcional: también podés descargar `qwen2-vl:7b` o `llama3.2-vision`)*.
+
+### 4. Abrir la Aplicación Web
+Una vez iniciado el contenedor, abrí tu navegador e ingresá a:
+
+👉 **http://localhost:7860**
 
 ---
 
-### 🚀 Ejecución del Sistema Multi-Agente
+## 💻 Método de Ejecución Local (Alternativo sin Docker)
 
-Para iniciar el servidor principal y la interfaz web interactiva en `http://localhost:7860`, ejecuta:
+Si preferís ejecutar la aplicación directamente en tu entorno Python local:
 
-```shell
+### 1. Dependencias del Sistema Operativo
+Debés contar con Tesseract OCR y librerías gráficas instaladas:
+* **Linux (Debian/Ubuntu):**
+  ```bash
+  sudo apt update && sudo apt install -y tesseract-ocr tesseract-ocr-spa libgl1 libglib2.0-0
+  ```
+* **macOS:**
+  ```bash
+  brew install tesseract tesseract-lang
+  ```
+
+### 2. Instalación con `uv` y Ejecución
+```bash
+# Sincronizar entorno de Python
+uv sync
+
+# Ejecutar la aplicación Gradio
 uv run tiro-con-arco
 ```
 
 *(Si utilizas un entorno virtual propio previamente activado como `venv_ia_proyecto`, puedes usar `uv run --active tiro-con-arco` o lanzar directamente `uv run tiro-con-arco`).*
+
+---
+
+# 🖥️ Interfaz Web Gradio
+* **Flujo Interactivo en 2 Pasos:**
+  * **Paso 1 (Segmentación):** Procesa el documento y muestra los cuadrantes recortados.
+  * **Paso 2 (OCR e Inspección):** Ejecuta el OCR en los cuadrantes seleccionados y presenta una **tabla diagnóstica enriquecida** que incluye la **vista previa del recorte visual** en cada fila de la tabla junto a la información del arquero, diana, club y motor de inferencia utilizado.
 
 
 # Agentes
