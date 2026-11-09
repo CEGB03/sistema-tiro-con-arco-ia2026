@@ -1,16 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🎯 Agente 1: Clasificador y Segmentador Semántico y Geométrico Híbrido (Tiro con Arco).
-
-Responsabilidades:
-1. Procesar archivos de entrada (PDF multipágina o Imagen PNG/JPG/JPEG).
-2. Renderizar páginas de PDF a imágenes ordenadas usando pypdfium2.
-3. Extraer texto vectorial del PDF y texto OCR con pytesseract.
-4. Inspeccionar la presencia de grillas físicas mediante morfología OpenCV (líneas de tabla).
-5. Clasificar el tipo de juego ('clasificacion', 'eliminatoria' o 'sin_modo') y layout ('4_arqueros', '2_arqueros', '1_arquero', 'portada').
-6. Generar los recortes físicos con solape inteligente en disco.
-7. Emitir un manifiesto JSON estructurado con la cola de trabajo para el Agente 2.
+Agente 1 v13: Con Padding de margen (20px) para evitar recortar los bordes exteriores de las tablas.
 """
 
 import os
@@ -27,11 +18,12 @@ try:
 except ImportError:
     PDF_SUPPORT = False
 
-try:
-    import pytesseract
-    OCR_SUPPORT = True
-except ImportError:
-    OCR_SUPPORT = False
+
+def extract_target_from_filename(filename):
+    m = re.search(r'(?:^|[^0-9a-zA-Z])([0-9]{1,2}[A-Da-d])(?:$|[^0-9a-zA-Z])', filename)
+    if m:
+        return m.group(1).upper()
+    return None
 
 
 class AgenteClasificadorSegmentador:
@@ -40,109 +32,50 @@ class AgenteClasificadorSegmentador:
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir, exist_ok=True)
 
-    def extraer_texto_completo(self, ruta_imagen, pdf_page=None):
-        """
-        Extrae tanto texto vectorial (si proviene de PDF) como texto OCR (pytesseract).
-        """
-        texto_vectorial = ""
-        texto_ocr = ""
-
-        if pdf_page is not None:
-            try:
-                textpage = pdf_page.get_textpage()
-                texto_vectorial = textpage.get_text_range() or ""
-            except Exception:
-                texto_vectorial = ""
-
-        if OCR_SUPPORT and os.path.exists(ruta_imagen):
-            try:
-                img_pil = Image.open(ruta_imagen)
-                texto_ocr = pytesseract.image_to_string(img_pil, lang="spa+eng")
-            except Exception:
-                try:
-                    img_pil = Image.open(ruta_imagen)
-                    texto_ocr = pytesseract.image_to_string(img_pil)
-                except Exception:
-                    texto_ocr = ""
-
-        return (texto_vectorial + " " + texto_ocr).lower()
-
-    def analizar_layout(self, ruta_imagen, pdf_page=None, tipo_juego_manual=None):
-        """
-        Analiza el documento mediante un enfoque híbrido (Texto semántico + Visión OpenCV):
-        - tipo_juego: 'clasificacion', 'eliminatoria' o 'sin_modo'
-        - layout: '4_arqueros', '2_arqueros', '1_arquero' o 'portada'
-        - activos: slots posicionales ['Pos_A'..'Pos_D'] | ['Puesto_1', 'Puesto_2'] | ['Individual'] | ['Portada']
-        """
+    def analizar_layout(self, ruta_imagen, tipo_juego_manual=None):
         filename = os.path.basename(ruta_imagen).lower()
 
-        # 1. Override manual si el usuario lo especificó
-        if tipo_juego_manual in ["clasificacion", "eliminatoria"]:
-            if tipo_juego_manual == "eliminatoria":
-                return "eliminatoria", "2_arqueros", ["Puesto_1", "Puesto_2"]
-            else:
-                return "clasificacion", "4_arqueros", ["Pos_A", "Pos_B", "Pos_C", "Pos_D"]
+        if tipo_juego_manual and tipo_juego_manual != "Auto":
+            m = str(tipo_juego_manual).lower()
+            if "info" in m or "portada" in m:
+                return "info", "portada"
+            elif "eliminatoria" in m or "duelo" in m or "2" in m:
+                return "eliminatoria", "2_arqueros"
+            elif "clasificacion_1" in m or "1_arquero" in m or "individual" in m:
+                return "clasificacion", "1_arquero"
+            elif "clasificacion_2" in m:
+                return "clasificacion", "2_arqueros"
+            elif "clasificacion_4" in m or "4_arqueros" in m:
+                return "clasificacion", "4_arqueros"
 
-        # 2. Abrir imagen y calcular aspecto
-        img = Image.open(ruta_imagen)
-        w, h = img.size
-        aspect = w / h
+        keywords_eliminatoria = ["puesto", "s.o.", "so", "ganador", "duelo", "eliminac"]
+        if any(kw in filename for kw in keywords_eliminatoria):
+            return "eliminatoria", "2_arqueros"
 
-        # 3. Extraer texto semántico combinando PDF vectorial + OCR
-        texto = self.extraer_texto_completo(ruta_imagen, pdf_page=pdf_page)
+        if any(p in filename for p in ["4-arqueros", "4arqueros"]):
+            return "clasificacion", "4_arqueros"
 
-        # 4. Análisis por Visión de Computadora (Morfología de líneas de tabla)
-        img_np = np.array(img.convert('RGB'))
-        gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
-        _, thresh = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY_INV)
+        pattern_1_arquero = r'^(?:[0-9]{1,2}[a-d])[\_\-]|(?:crop|recorte|individual|1[-_]arquero|1arquero)'
+        if re.search(pattern_1_arquero, filename):
+            return "clasificacion", "1_arquero"
 
-        kernel_h = cv2.getStructuringElement(cv2.MORPH_RECT, (max(10, w // 20), 1))
-        lines_h = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel_h)
+        pil_img = Image.open(ruta_imagen)
+        w, h = pil_img.size
 
-        top_h_density = float(np.mean(lines_h[0:int(h * 0.45), :]))
-        bot_h_density = float(np.mean(lines_h[int(h * 0.45):int(h * 0.95), :]))
-        total_h_density = float(np.mean(lines_h))
+        if w < 750 and h < 850:
+            return "clasificacion", "1_arquero"
 
-        # 5. Detección de Eliminatorias
-        kw_eliminatoria = ["total set points", "set points", "ganador", "s.o.", "shoot off", "shoot-off", "contencion", "duelo"]
-        has_elim_kw = any(kw in texto for kw in kw_eliminatoria)
-        has_posicion_num = bool(re.search(r'posici[oó]n\s*\d+', texto))
-        is_filename_elim = any(k in filename for k in ["eliminacion", "duelo", "2-arqueros", "2_arqueros"])
-        is_landscape_duel = (aspect > 1.25) and (total_h_density > 1.0)
+        if w > h * 1.2:
+            return "clasificacion", "2_arqueros"
 
-        if has_elim_kw or has_posicion_num or is_filename_elim or is_landscape_duel:
-            return "eliminatoria", "2_arqueros", ["Puesto_1", "Puesto_2"]
+        return "clasificacion", "4_arqueros"
 
-        # 6. Detección de Clasificación vs Portada/Info
-        has_scorecard_text = any(k in texto for k in ["10s", "9s", "series", "tot.", "sum", "ronda #", "hoja de anotac", "arquero", "atleta"])
-        dianas_found = set(re.findall(r'\b\d+[a-d]\b', texto))
-        is_filename_1archer = any(k in filename for k in ["1a-", "1b-", "1c-", "1d-", "individual"])
-        is_filename_4archers = any(k in filename for k in ["4-arqueros", "4_arqueros"])
-
-        has_table_grid = (top_h_density > 1.2 or bot_h_density > 1.2 or has_scorecard_text or len(dianas_found) > 0)
-
-        if not has_table_grid:
-            return "sin_modo", "portada", ["Portada"]
-
-        # 7. Discriminar entre 4 Arqueros y 1 Arquero
-        if is_filename_1archer:
-            return "clasificacion", "1_arquero", ["Individual"]
-
-        if is_filename_4archers or (top_h_density > 1.2 and bot_h_density > 1.2) or len(dianas_found) >= 3:
-            return "clasificacion", "4_arqueros", ["Pos_A", "Pos_B", "Pos_C", "Pos_D"]
-        else:
-            return "clasificacion", "1_arquero", ["Individual"]
-
-    def procesar_documento(self, ruta_archivo, tipo_juego_manual=None):
-        """
-        Procesa el archivo de entrada (PDF o Imagen) y retorna un
-        manifiesto JSON con las imágenes recortadas listas para el Agente 2.
-        """
+    def procesar_documento(self, ruta_archivo, tipo_juego_manual=None, page_overrides=None):
         if not os.path.exists(ruta_archivo):
             raise FileNotFoundError(f"El archivo '{ruta_archivo}' no existe.")
 
         es_pdf = ruta_archivo.lower().endswith('.pdf')
-        paginas_datos = []
+        paginas_imagenes = []
 
         if es_pdf:
             if not PDF_SUPPORT:
@@ -153,54 +86,64 @@ class AgenteClasificadorSegmentador:
                 pil_img = bitmap.to_pil()
                 img_path = os.path.join(self.output_dir, f"pagina_{i+1}.png")
                 pil_img.save(img_path)
-                paginas_datos.append((i + 1, img_path, page))
+                paginas_imagenes.append((i + 1, img_path))
         else:
-            paginas_datos.append((1, ruta_archivo, None))
+            paginas_imagenes.append((1, ruta_archivo))
 
         manifiesto = {
             "archivo_origen": os.path.basename(ruta_archivo),
-            "total_paginas": len(paginas_datos),
+            "total_paginas": len(paginas_imagenes),
             "tareas_agente2": []
         }
 
-        for num_pag, img_path, pdf_page in paginas_datos:
-            tipo_juego, layout, activos = self.analizar_layout(
-                img_path, pdf_page=pdf_page, tipo_juego_manual=tipo_juego_manual
-            )
+        fn_global = os.path.basename(ruta_archivo)
+        target_desde_nombre = extract_target_from_filename(fn_global)
+
+        # Margin/Padding para evitar recortar los bordes de la grilla
+        margin = 20
+
+        for num_pag, img_path in paginas_imagenes:
+            modo_manual = tipo_juego_manual
+            if page_overrides and isinstance(page_overrides, dict):
+                modo_manual = page_overrides.get(str(num_pag), modo_manual)
+
+            tipo_juego, layout = self.analizar_layout(img_path, tipo_juego_manual=modo_manual)
             img = Image.open(img_path)
             w, h = img.size
 
-            # Coordenadas de recortes por layout
-            if layout == "4_arqueros":
+            if layout == "portada" or tipo_juego == "info":
+                cuadrantes_coords = {"Portada": (0, 0, w, h)}
+            elif layout == "4_arqueros":
                 cuadrantes_coords = {
-                    "Pos_A": (0, 0, w // 2, h // 2),
-                    "Pos_B": (w // 2, 0, w, h // 2),
-                    "Pos_C": (0, int(h * 0.38), w // 2, h),
-                    "Pos_D": (int(w * 0.48), int(h * 0.38), w, h)
+                    "A": (0, 0, min(w, w // 2 + margin), min(h, h // 2 + margin)),
+                    "B": (max(0, w // 2 - margin), 0, w, min(h, h // 2 + margin)),
+                    "C": (0, max(0, h // 2 - margin), min(w, w // 2 + margin), h),
+                    "D": (max(0, w // 2 - margin), max(0, h // 2 - margin), w, h)
                 }
             elif layout == "2_arqueros":
                 cuadrantes_coords = {
-                    "Puesto_1": (0, 0, int(w * 0.52), h),
-                    "Puesto_2": (int(w * 0.48), 0, w, h)
+                    "A": (0, 0, min(w, w // 2 + margin), h),
+                    "B": (max(0, w // 2 - margin), 0, w, h)
                 }
             else:
-                cuadrantes_coords = {
-                    "Individual" if layout == "1_arquero" else "Portada": (0, 0, w, h)
-                }
+                tid = target_desde_nombre if target_desde_nombre else "1A"
+                cuadrantes_coords = {tid: (0, 0, w, h)}
 
-            for target_id in activos:
-                coords = cuadrantes_coords.get(target_id, (0, 0, w, h))
+            for target_pos, coords in cuadrantes_coords.items():
                 crop_img = img.crop(coords)
-                crop_filename = f"pag_{num_pag}_crop_{target_id}.png"
+                crop_filename = f"pag_{num_pag}_pos_{target_pos}.png"
                 crop_path = os.path.join(self.output_dir, crop_filename)
                 crop_img.save(crop_path, "PNG")
 
+                label_str = f"Pág {num_pag} - Pos {target_pos}"
                 manifiesto["tareas_agente2"].append({
                     "pagina": num_pag,
-                    "target_id": target_id,
+                    "target_id": target_pos,
                     "tipo_juego": tipo_juego,
                     "layout": layout,
-                    "ruta_recorte": crop_path
+                    "ruta_recorte": crop_path,
+                    "label": label_str
                 })
 
+        print(f"[Agente 1] ✂️ Completada la clasificación y segmentación de {len(paginas_imagenes)} página(s) con padding de {margin}px.")
         return manifiesto
