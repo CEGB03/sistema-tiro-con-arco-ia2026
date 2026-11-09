@@ -66,6 +66,19 @@ Una vez iniciado el contenedor, abrí tu navegador e ingresá a:
 
 👉 **http://localhost:7860**
 
+### 5. Visualizacion de logs
+Para poder ver los logs del docker, ejecutá en tu terminal:
+
+```bash
+docker compose logs -f archery-app
+```
+
+### 6. Frenado del contenedor
+Para poder frenar el contenedor de su ejecucion, ejecutá en tu terminal:
+```bash
+docker compose down
+```
+
 ---
 
 ## 💻 Método de Ejecución Local (Alternativo sin Docker)

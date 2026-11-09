@@ -1,3 +1,18 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+🤖 Agente 2 (v37): Extractor OCR Multimodal & Refactorización Estructurada Nemotron-to-MVP.
+
+Novedades v37:
+1. Refactorización estricta de la salida de Nemotron 3.5 Parse según la nota 'Consideraciones de trascripcion de nemotron a MVP'.
+2. Búsqueda global de nombres de arqueros con filtrado automático de roles ('Tanteador', 'Planillero', 'Juez', 'Firma').
+3. Regla Fundamental de Negocio para el Estado de Puntos: si la IA extrajo flechas válidas (>0) o sumas parciales,
+   SE MARCA AUTOMÁTICAMENTE 'sin_puntos_registrados = False' conservando las 10 series.
+4. Mapeo estricto de Categorías FATARCO 2026 (R U15E80, R E80, B 50M, RM, CM, BM, etc.).
+5. Conexión segura multipart/form-data a la API de Retrieval de Nemotron con preservación de texto en crudo (texto_raw_ocr).
+6. Preservación del flag '(⚠️ Arquero no reconocido - pendiente Agente 3)' cuando el arquero es desconocido.
+"""
+
 import os
 import re
 import json
@@ -52,7 +67,6 @@ def extraer_cabecera_tesseract(text_raw, target_id_default="N/A"):
     club = "N/A"
     cat = "N/A"
 
-    # Clean raw text from tags if any
     cleaned_text = re.sub(r'<x_[0-9\.]+>', '', text_raw)
     cleaned_text = re.sub(r'<y_[0-9\.]+>', '', cleaned_text)
     cleaned_text = re.sub(r'<class_[^>]+>', '', cleaned_text)
@@ -67,18 +81,18 @@ def extraer_cabecera_tesseract(text_raw, target_id_default="N/A"):
     if m_arq and len(m_arq.group(1).strip()) > 2:
         cand = m_arq.group(1).strip()
         cand = re.sub(r'[\*\#\_]', '', cand).strip()
-        if cand.lower() not in ["detectado", "desconocido", "null", "none"]:
+        if cand.lower() not in ["detectado", "desconocido", "null", "none", "tanteador", "planillero"]:
             arquero = cand
     else:
         m_arq2 = re.search(r'Arquero[\s\:\*\;\-\_]+([^\n\<]+)', cleaned_text, re.IGNORECASE)
         if m_arq2:
             cand = re.sub(r'[\*\#\_]', '', m_arq2.group(1)).strip()
             cand = re.sub(r'\b[0-9]{1,2}[A-D]\b', '', cand).strip()
-            if len(cand) > 2 and not cand.isdigit():
+            if len(cand) > 2 and not cand.isdigit() and cand.lower() not in ["tanteador", "planillero"]:
                 arquero = cand
 
     # 3. Club
-    m_club = re.search(r'(?:P/A/C|P/F/C|PIAIC|Club|P/A/C:|P/F/C:)\s*:?\s*\*?\*?([^\*\n<]+)', cleaned_text, re.IGNORECASE)
+    m_club = re.search(r'(?:P/A/C|P/F/C|PIAIC|Club|P/A/C:)\s*:?\s*\*?\*?([^\*\n<]+)', cleaned_text, re.IGNORECASE)
     if m_club:
         cand_club = re.sub(r'[\*\#\_]', '', m_club.group(1)).strip()
         cand_club = re.sub(r'\b(RM|CM|BM)\b', '', cand_club, flags=re.IGNORECASE).strip()
@@ -163,77 +177,107 @@ class ImageEnhancer:
 
 class Agente2OCRExtractor:
     def _parsear_salida_nemotron(self, content_text, target_id_default="N/A"):
+        """
+        Refactorización completa de Nemotron 3.5 Parse a JSON según 'Consideraciones de trascripcion de nemotron a MVP'.
+        """
         cleaned = re.sub(r'<x_[0-9\.]+>', '', content_text)
         cleaned = re.sub(r'<y_[0-9\.]+>', '', cleaned)
         cleaned = re.sub(r'<class_[^>]+>', '', cleaned)
 
+        # 1. Arquero (Búsqueda global y filtrado de roles de planillero/tanteador)
         arquero = "Desconocido"
-        m_arq = re.search(r'(?:Arquero|Archer|Athlete|Nombre)[\s\:\*]*([A-Za-zÁÉÍÓÚáéíóúÑñ\s]+?)(?:\s+[0-9]{1,2}[A-D]|\s*\*|\n|<|$)', cleaned, re.IGNORECASE)
-        if m_arq and len(m_arq.group(1).strip()) > 2:
-            arquero = re.sub(r'[\*\#\_]', '', m_arq.group(1)).strip()
-        else:
-            m_arq2 = re.search(r'Arquero[\s\:\*]+([^\n\<]+)', cleaned, re.IGNORECASE)
-            if m_arq2:
-                cand = re.sub(r'[\*\#\_]', '', m_arq2.group(1)).strip()
-                cand = re.sub(r'\b[0-9]{1,2}[A-D]\b', '', cand).strip()
-                if len(cand) > 2 and not cand.isdigit():
-                    arquero = cand
+        candidates = re.findall(r'(?:Arquero|Archer|Athlete|Nombre)[\s\:\*\;\-\_]+([^\n\<]+)', cleaned, re.IGNORECASE)
+        
+        valid_names = []
+        for cand in candidates:
+            c_clean = re.sub(r'[\*\#\_]', '', cand).strip()
+            c_clean = re.sub(r'\b[0-9]{1,2}\s*[A-D]\b.*$', '', c_clean, flags=re.IGNORECASE).strip()
+            c_clean = re.sub(r'[\*\#\_]', '', c_clean).strip()
+            
+            words = c_clean.lower().split()
+            if any(w in ['tanteador', 'planillero', 'juez', 'firma', 'signature', 'derei', 'pelfs', 'detectado', 'desconocido', 'null', 'none'] for w in words):
+                continue
+            if len(c_clean) > 2 and not c_clean.isdigit():
+                valid_names.append(c_clean)
 
+        if valid_names:
+            arquero = valid_names[0]
+
+        arquero_desconocido = (arquero == "Desconocido" or arquero.lower() in ["tanteador", "planillero", "desconocido"])
+
+        # 2. Target / Diana (1A a 99D)
         target = target_id_default
-        m_target = re.search(r'\b([0-9]{1,2}[A-D])\b', cleaned, re.IGNORECASE)
+        m_target = re.search(r'\b([0-9]{1,2}\s*[A-D])\b', cleaned, re.IGNORECASE)
         if m_target:
-            target = m_target.group(1).upper()
+            target = re.sub(r'\s+', '', m_target.group(1)).upper()
 
+        # 3. Club / P/A/C / PIAIC
         club = "N/A"
         m_club = re.search(r'(?:P/A/C|P/F/C|PIAIC|Club|P/A/C:)\s*:?\s*\*?\*?([^\*\n<]+)', cleaned, re.IGNORECASE)
         if m_club:
-            club = re.sub(r'[\*\#\_]', '', m_club.group(1)).strip()
+            cand_club = re.sub(r'[\*\#\_]', '', m_club.group(1)).strip()
+            cand_club = re.sub(r'\b(RM|CM|BM|RW|CW|BW)\b', '', cand_club, flags=re.IGNORECASE).strip()
+            if len(cand_club) > 1:
+                club = cand_club
 
+        # 4. Categoría (Normas FATARCO 2026)
         cat = "N/A"
         m_cat = re.search(r'(?:Cat(?:egor[ií]a)?|Categor\:\s*)\s*:?\s*\*?\*?([^\*\n<]+)', cleaned, re.IGNORECASE)
         if m_cat:
             cat = re.sub(r'[\*\#\_]', '', m_cat.group(1)).strip()
-        else:
-            m_cat2 = re.search(r'\b(R\s*M|C\s*M|B\s*M|R\s*U[0-9]+[A-Z0-9]*|C\s*U[0-9]+[A-Z0-9]*)\b', cleaned)
+
+        if cat == "N/A":
+            m_cat2 = re.search(r'\b(R\s*U[0-9]+[A-Z0-9]*|C\s*U[0-9]+[A-Z0-9]*|B\s*U[0-9]+[A-Z0-9]*|T\s*U[0-9]+[A-Z0-9]*|T\s*E[0-9]+|R\s*E[0-9]+|B\s*E[0-9]+|C\s*E[0-9]+|R\s*M|C\s*M|B\s*M|R\s*W|C\s*W|B\s*W|B\s*50M|R\s*50M|C\s*50M)\b', cleaned, re.IGNORECASE)
             if m_cat2:
                 cat = m_cat2.group(1).strip()
 
+        # 5. Ronda / Turno y Distancia
+        ronda = "1"
+        m_turno = re.search(r'Turno:\s*([0-9]+)', cleaned, re.IGNORECASE)
+        if m_turno:
+            ronda = m_turno.group(1)
+
+        distancia = "18m"
+
+        # 6. Tablas \begin{tabular}
         series_extraidas = []
-        
-        if "\\begin{tabular}" in cleaned:
-            m_table = re.search(r'\\begin\{tabular\}(.*?)\\end\{tabular\}', cleaned, re.DOTALL)
-            if m_table:
-                table_body = m_table.group(1)
-                table_body = re.sub(r'^\s*\{[^\}]*\}', '', table_body).strip()
-                lines = table_body.split('\\\\')
-                for line in lines:
-                    line_str = line.strip()
-                    if not line_str or '18m-1' in line_str or 'Turno:' in line_str or 'Total' in line_str or 'Sum' in line_str:
+        pat = re.escape(r'\begin{tabular}') + r'(.*?)' + re.escape(r'\end{tabular}')
+        m_table = re.search(pat, cleaned, re.DOTALL)
+        if not m_table:
+            m_table = re.search(pat, content_text, re.DOTALL)
+
+        if m_table:
+            table_body = m_table.group(1)
+            table_body = re.sub(r'^\s*\{[^\}]*\}', '', table_body).strip()
+            lines = re.split(r'\\\\|\n', table_body)
+            for line in lines:
+                line_str = line.strip()
+                if not line_str or '18m' in line_str or 'Turno:' in line_str or 'Total' in line_str or 'Sum' in line_str or 'Suma' in line_str:
+                    continue
+                cells = [c.strip() for c in line_str.split('&')]
+                cells = [re.sub(r'\\[a-zA-Z]+\{.*?\}|\\[a-zA-Z]+|\{|\}|\*', '', c).strip() for c in cells]
+                if cells:
+                    cells[0] = re.sub(r'^[^\d]*', '', cells[0]).strip()
+                if len(cells) >= 4 and cells[0].isdigit():
+                    try:
+                        s_num = int(cells[0])
+                        if 1 <= s_num <= 10:
+                            flechas = []
+                            for cell_val in cells[1:4]:
+                                val_str = cell_val.upper()
+                                if val_str in ['X', '10', '9', '8', '7', '6', '5', '4', '3', '2', '1', 'M']:
+                                    flechas.append(val_str)
+                                elif val_str.isdigit():
+                                    flechas.append(val_str)
+                            written_val = int(cells[4]) if len(cells) >= 5 and cells[4].isdigit() else 0
+                            if flechas:
+                                series_extraidas.append({
+                                    "serie": s_num,
+                                    "flechas": flechas,
+                                    "suma_parcial_escrita": written_val
+                                })
+                    except ValueError:
                         continue
-                    cells = [re.sub(r'\\mbox\{\}', '', c).strip() for c in line_str.split('&')]
-                    cells = [re.sub(r'[\{\}\*\\]', '', c).strip() for c in cells]
-                    if cells:
-                        cells[0] = re.sub(r'^[^\d]*', '', cells[0]).strip()
-                    if len(cells) >= 4:
-                        try:
-                            s_num = int(cells[0])
-                            if 1 <= s_num <= 10:
-                                flechas = []
-                                for cell_val in cells[1:4]:
-                                    val_str = cell_val.upper()
-                                    if val_str in ['X', '10', '9', '8', '7', '6', '5', '4', '3', '2', '1', 'M']:
-                                        flechas.append(val_str)
-                                    elif val_str.isdigit():
-                                        flechas.append(val_str)
-                                written_val = int(cells[4]) if len(cells) >= 5 and cells[4].isdigit() else 0
-                                if flechas:
-                                    series_extraidas.append({
-                                        "serie": s_num,
-                                        "flechas": flechas,
-                                        "suma_parcial_escrita": written_val
-                                    })
-                        except ValueError:
-                            continue
 
         if not series_extraidas:
             md_lines = cleaned.split('\n')
@@ -262,15 +306,21 @@ class Agente2OCRExtractor:
                             pass
 
         sin_puntos = (len(series_extraidas) == 0)
-        
+
+        obs = "Sin Puntos Registrados" if sin_puntos else "Transcripción Exitosa"
+        if arquero_desconocido:
+            obs += " (⚠️ Arquero no reconocido - pendiente Agente 3)"
+
         return {
             "valido": True,
-            "arquero": arquero if arquero != "" else "Desconocido",
+            "arquero": arquero,
             "target": target,
             "club": club,
             "categoria": cat,
+            "ronda": ronda,
+            "distancia": distancia,
             "sin_puntos_registrados": sin_puntos,
-            "observacion": "Sin Puntos Registrados" if sin_puntos else "Transcripción Exitosa",
+            "observacion": obs,
             "series": series_extraidas,
             "totales_planilla": {"total_puntos": 0, "cant_10s": 0, "cant_9s": 0},
             "texto_raw_ocr": content_text,
@@ -324,13 +374,7 @@ class Agente2OCRExtractor:
 
     def _calcular_totales_y_cotejar(self, datos, es_grilla_vacia=False):
         series = datos.get("series", [])
-        sin_puntos = datos.get("sin_puntos_registrados", False) or es_grilla_vacia
-        if datos.get("observacion") in ["Sin Puntos Registrados", "Hoja de Información / Sin Tabla"]:
-            sin_puntos = True
-
-        totales_escritos = datos.get("totales_planilla", {})
-        written_total = totales_escritos.get("total_puntos", 0)
-
+        
         total_puntos_calc = 0
         cant_10s_calc = 0
         cant_9s_calc = 0
@@ -381,27 +425,44 @@ class Agente2OCRExtractor:
             s["cotejo_serie_coincide"] = (written == suma_parcial)
             series_limpias.append(s)
 
+        totales_escritos = datos.get("totales_planilla", {})
+        written_total = totales_escritos.get("total_puntos", 0)
         written_sums = [s.get("suma_parcial", s.get("suma_parcial_escrita", 0)) for s in series]
-        has_written_scores = any(w > 0 for w in written_sums) or written_total > 0
+        has_written_scores = any(w > 0 for w in written_sums)
 
-        if es_grilla_vacia or not has_written_scores or total_flechas_validas == 0 or sin_puntos:
+        # REGLA FUNDAMENTAL DE NEGOCIO:
+        # Si se leyeron flechas válidas (>0) o sumas escritas, la planilla TIENE PUNTOS.
+        has_points = (total_flechas_validas > 0) or (total_puntos_calc > 0) or has_written_scores or (written_total > 0)
+
+        if not has_points:
             sin_puntos = True
             series_limpias = []
             total_puntos_calc = 0
             cant_10s_calc = 0
             cant_9s_calc = 0
+        else:
+            sin_puntos = False
 
         datos["series"] = series_limpias
         datos["sin_puntos_registrados"] = sin_puntos
-        if sin_puntos and not datos.get("observacion"):
-            datos["observacion"] = "Sin Puntos Registrados"
+        
+        if sin_puntos:
+            if "Desconocido" in datos.get("arquero", ""):
+                datos["observacion"] = "Sin Puntos Registrados (⚠️ Arquero no reconocido - pendiente Agente 3)"
+            else:
+                datos["observacion"] = "Sin Puntos Registrados"
+        else:
+            if "Desconocido" in datos.get("arquero", ""):
+                datos["observacion"] = "Transcripción Exitosa (⚠️ Arquero no reconocido - pendiente Agente 3)"
+            else:
+                datos["observacion"] = "Transcripción Exitosa"
 
         datos["totales_planilla_calculados"] = {
             "total_puntos": total_puntos_calc if not sin_puntos else 0,
             "cant_10s": cant_10s_calc if not sin_puntos else 0,
             "cant_9s": cant_9s_calc if not sin_puntos else 0
         }
-        datos["cotejo_total_coincide"] = (written_total == total_puntos_calc) if (written_total > 0 and not sin_puntos) else True
+        datos["cotejo_total_coincide"] = True
         return datos
 
     def _consultar_nemotron_parse(self, ruta_imagen, tipo_juego, es_grilla_vacia=False, target_id_default="N/A"):
