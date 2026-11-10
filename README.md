@@ -12,7 +12,8 @@ sistema-tiro-con-arco-ia2026/
 ├── src/ ← Código fuente modular del proyecto
 │    ├── __init__.py 
 │    ├── agente_1_clasificador_segmentador.py ← Agente 1 (Segmentación visual OpenCV/Pillow)
-│    ├── agente_2_ocr_extractor.py ← Agente 2
+│    ├── agente_2_ocr_extractor.py ← Agente 2 (Digitaliza los valores de cada cuadrante de planilla)
+│    ├── agente_3_validador_concilliador.py ← Agente 3 (Valida los valores de flechas)
 │    └── app_tiro_con_arco.py ← Interfaz principal / Orquestador Gradio
 ├── notebooks/ ← Pruebas de exploración / evaluación 
 │    └── exploracion_y_evaluacion_ocr.ipynb 
@@ -114,108 +115,157 @@ uv run tiro-con-arco
   * **Paso 1 (Segmentación):** Procesa el documento y muestra los cuadrantes recortados.
   * **Paso 2 (OCR e Inspección):** Ejecuta el OCR en los cuadrantes seleccionados y presenta una **tabla diagnóstica enriquecida** que incluye la **vista previa del recorte visual** en cada fila de la tabla junto a la información del arquero, diana, club y motor de inferencia utilizado.
 
+***
 
 # Agentes
 
-## 🤖 Agente 1: Clasificador y Segmentador Semántico por Páginas 
-**Objetivo:** Recibir el archivo de entrada (**PDF multipágina** o **Imagen PNG/JPG**), procesar página por página mediante análisis híbrido (**extracción de texto semántico y visión por computadora con OpenCV/Pillow**), clasificar la estructura del documento y segmentar ordenadamente las zonas de cada arquero, emitiendo un **manifiesto JSON con la cola de trabajo estandarizada** para el Agente 2.
+## 🤖 Agente 1: Clasificador y Segmentador Semántico (v17)
+**Objetivo:** Recibir el archivo de entrada (**PDF multipágina** o **Imagen PNG/JPG**), procesar página por página y segmentar las planillas de arqueros. Utiliza una regla estricta de **homogeneidad documental** y descarte de hojas sin datos.
 
-### 🧠 Lógica de Clasificación Semántica (Text-Anchored Classification)
-A diferencia de los cortes geométricos estáticos, el Agente 1 analiza anclas de texto e identificadores clave en la página completa:
-- **Eliminatoria (`2_arqueros` / Duelos Directos):** Detecta la presencia de marcas exclusivas de enfrentamientos directos como `"Ganador"`, `"Total Set Points"`, `"S.O."` (Shoot-Off), `"Contención XA/XB"` o `"Posición X"` (puesto en la llave/bracket).
-- **Clasificación (`4_arqueros` o `1_arquero`):** Detecta sufijos de diana/contención física (`XA`, `XB`, `XC`, `XD`).
-- Si encuentra 3 o 4 combinaciones: clasifica como `4_arqueros` (matriz 2x2).
-- Si encuentra 1 sola combinación: clasifica como `1_arquero` (planilla individual).
-- **Portada / Separador (`portada`):** Si la página no contiene grillas de puntuación ni anclas de tiro (páginas de título o reglamentos), la clasifica como `sin_modo`.
+### 🧠 Opciones de Diferenciación (Clasificación, Eliminatoria e Información)
+El Agente 1 no adivina; utiliza visión por computadora (OpenCV) y reglas de negocio para diferenciar el tipo de documento:
+- **Descarte de Hoja Completa (`informacion` / `portada`):** Si la página no contiene una tabla de tiros (detección de grillas con morfología de líneas) o si, aun teniéndola, la evaluación de densidad de tinta confirma que **todos los cuadrantes están vacíos** (sin anotaciones manuscritas), se descarta la hoja completa. Se genera un solo recorte de la página entera, sin dividir en cuadrantes.
+- **Homogeneidad Documental (`clasificacion` vs `eliminatoria`):** Si la página sí tiene anotaciones, se clasifica de forma **homogénea** para toda la hoja. Si el layout se detecta como 4 arqueros, los 4 recortes serán de `clasificacion`. Si es de 2 arqueros, será de `eliminatoria`. **Nunca se mezclan tipos de juego en una misma página.**
+- **Cuadrantes Vacíos Parciales:** Si una planilla es de 4 arqueros pero uno solo está en blanco, ese recorte se marca con `es_cuadrante_vacio: True`, pero conserva el `tipo_juego: clasificacion` para mantener la coherencia.
 
 ### ✂️ Estrategia de Segmentación y Recorte Posicional
-El Agente 1 no asume números fijados de diana (evita hardcodear `"1A"`, `"1B"`), sino **etiquetas posicionales dinámicas**:
-- **Clasificación (4 Arqueros):** Asigna slots posicionales `Pos_A`, `Pos_B`, `Pos_C` y `Pos_D`. Aplica un **solape vertical del 12%** (`y = 38%` de la altura) para los cuadrantes inferiores (`Pos_C` y `Pos_D`), garantizando que la caja superior con el nombre del atleta nunca quede recortada.
-- **Eliminatoria (2 Arqueros / Duelos):** Asigna slots `Puesto_1` (Izquierda) y `Puesto_2` (Derecha). Realiza el corte desde el borde superior absoluto (`y = 0`), manteniendo visibles el nombre del arquero, club, categoría y la tabla de *Set Points*.
-- **Individual (1 Arquero):** Conserva el **100% de la imagen original** sin recortar (`posicion_slot: "Individual"`).
-- **Portada:** Conserva la vista entera etiquetada como `posicion_slot: "Portada"`.
+- **Clasificación (4 Arqueros):** Slots `A`, `B`, `C`, `D`. Aplica un margen de solape de 20px para no cortar los nombres en el centro de la hoja.
+- **Eliminatoria (2 Arqueros):** Slots `A` (Izquierda) y `B` (Derecha).
+- **Individual (1 Arquero):** Conserva el 100% de la imagen.
 
 ### 📄 Salida (Manifiesto JSON)
-Genera una cola de trabajo estructurada en disco con el siguiente formato:
-```json 
-{ 
-     "archivo_origen": "torneo_copa_san_francisco.pdf", 
-     "total_paginas": 3, 
-     "tareas_agente2": [
-          {
-               "pagina": 1,
-               "posicion_slot": "Portada",
-               "tipo_juego": "sin_modo",
-               "layout": "portada",
-               "ruta_recorte": "/tmp/archery_agent1/pag_1_crop_Portada.png"
-          },
-          { 
-               "pagina": 2, 
-               "posicion_slot": "Pos_A",
-               "tipo_juego": "clasificacion",
-               "layout": "4_arqueros",
-               "ruta_recorte": "/tmp/archery_agent1/pag_2_crop_Pos_A.png"
-          },
-          { 
-               "pagina": 3,
-               "posicion_slot": "Puesto_1",
-               "tipo_juego": "eliminatoria",
-               "layout": "2_arqueros",
-               "ruta_recorte": "/tmp/archery_agent1/pag_3_crop_Puesto_1.png"
-          }
-     ] 
-}
-```
-
-## 🤖 Agente 2: Preprocesador de Imagen y Extractor OCR Multimodal (NVIDIA NIM)
-
-**Objetivo:** Tomar las imágenes recortadas por el Agente 1, aplicar un pipeline de procesamiento digital de imágenes (PDI) para maximizar la legibilidad del trazo manuscrito y transcribir con precisión todos los datos (números, letras, encabezados y puntuaciones) utilizando modelos multimodales de visión por computadora alojados en **NVIDIA NIM**.
-
----
-
-### 🎨 1. Pipeline de Preprocesamiento de Imagen (OpenCV & Pillow)
-Antes de enviar el recorte al modelo de visión, la imagen atraviesa una fase de limpieza visual para eliminar ruido, sombras del escaneo y arrugas del papel:
-- **CLAHE (Contrast Limited Adaptive Histogram Equalization):** Realce de contraste local adaptativo para rescatar escrituras suaves en lápiz o tinta azul/negra tenue.
-- **Filtro Bilateral / Denoising:** Supresión de tramas de fondo e imperfecciones del papel sin suavizar ni deformar los bordes de los números.
-- **Deskew (Alineación Estructural):** Corrección fina de inclinación horizontal para garantizar que las líneas de las series queden perfectamente alineadas.
-- **Binarización y Escalado Normalizado:** Conversión a alto contraste manteniendo una resolución óptima para inferencia multimodal.
-
----
-
-### 🧠 2. Inferencia Multimodal & Cadena de Fallback (NVIDIA NIM)
-El agente consulta la API de NVIDIA NIM mediante un **prompt estructurado en JSON Schema** diferenciado por tipo de juego:
-- **Planillas de Clasificación:** Extrae el encabezado (Arquero, Club, Categoría, Diana/Target `1A..D`), las 10 series de 3 flechas, sumas parciales, total general y conteo de `10s` y `9s`.
-- **Planillas de Eliminatorias:** Extrae el puesto de la grilla (`Posición X`), puntos por set en enfrentamientos directos, `Total Set Points`, el indicador de `Ganador` y puntuación de empate `S.O.` (Shoot-Off).
-
-#### 🔄 Resiliencia por Cadena de Fallback Automática
-Para evitar interrupciones por saturación o límites de tasa (HTTP 429 / 504 Timeout), el motor conmuta automáticamente en tiempo real entre la suite multimodal de NVIDIA NIM:
-1. `meta/llama-3.2-11b-vision-instruct`
-2. `moonshotai/kimi-k3`
-3. `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning`
-4. `google/paligemma`
-
----
-
-### 📄 3. Salida (Manifiesto de Transcripción JSON)
-El Agente 2 genera un archivo JSON con todos los datos extraídos de cada arquero, sirviendo como entrada directa para la validación y corrección aritmética del **Agente 3**:
-
 ```json
 {
-  "archivo_origen": "2026-05-03-S-AFPSF-Planillas-20260505_recortado.pdf",
-  "total_transcripciones": 2,
-  "transcripciones": [
+  "archivo_origen": "planillas_torneo.pdf",
+  "total_paginas": 2,
+  "tareas_agente2": [
     {
-      "pagina": 3,
-      "posicion_slot": "Pos_A",
+      "pagina": 1,
+      "target_id": "Portada",
+      "tipo_juego": "informacion",
+      "layout": "portada",
+      "ruta_recorte": "/tmp/archery_agent1/pag_1_pos_Portada.png",
+      "label": "Pág 1 - Hoja de Información / Portada",
+      "es_pagina_informacion": true,
+      "es_cuadrante_vacio": false,
+      "razon_preclasificacion": "Sin tabla de tiros en la hoja / Hoja Informativa"
+    },
+    {
+      "pagina": 2,
+      "target_id": "A",
       "tipo_juego": "clasificacion",
-      "arquero": "Leguiza Marcelo Gabriel",
-      "target": "1A",
-      "club": "TCAP",
-      "series": [
-        {"serie": 1, "flechas":, "suma_parcial": 27, "total_acumulado": 27},
-        {"serie": 2, "flechas":, "suma_parcial": 28, "total_acumulado": 55}
-      ],
-      "totales_planilla": {"total_puntos": 247, "cant_10s": 4, "cant_9s": 4}
+      "layout": "4_arqueros",
+      "ruta_recorte": "/tmp/archery_agent1/pag_2_pos_A.png",
+      "label": "Pág 2 - Pos A",
+      "es_pagina_informacion": false,
+      "es_cuadrante_vacio": false,
+      "razon_preclasificacion": "Contiene datos anotados"
     }
   ]
 }
+```
+
+---
+
+## 🤖 Agente 2: Preprocesador y Extractor OCR Multimodal (v47)
+**Objetivo:** Tomar los recortes del Agente 1, preprocesar la imagen y transcribir los datos utilizando una **cadena de fallback** entre APIs en la nube y modelos locales.
+
+### 🎨 1. Pipeline de Preprocesamiento (OpenCV)
+- **Realce (CLAHE):** Resalta la tinta manuscrita frente a las sombras del escaneo.
+- **Filtro Bilateral:** Elimina el ruido del papel sin difuminar los números.
+- **Detección de Tabla Vacía:** Si el recorte no tiene suficiente tinta (ratio < 0.0003), se salta el OCR automáticamente y se marca como `sin_puntos_registrados`.
+
+### 🧠 2. Diferenciación y Cadena de Resiliencia (Fallback)
+El Agente 2 diferencia entre recortes de planillas reales y hojas de información.
+- **Si `es_pagina_informacion` es True:** Omite el OCR inmediatamente (ahorra cuota y tiempo) y devuelve un JSON marcado como `Descartado (Sin OCR)`.
+- **Si es una planilla real:** Intenta secuencialmente:
+  1. **NVIDIA Nemotron Parse (API):** Usa el endpoint `/retrieval/nvidia/nemotron-3.5-parse/parse`. Extrae la tabla en formato LaTeX y el código la parsea a JSON.
+  2. **Ollama Local (Fallback):** Modelos como `qwen2.5-vl` o `deepseek-ocr`.
+  3. **Tesseract OCR:** Como último recurso de texto tradicional.
+
+### 📄 Salida (Manifiesto JSON)
+```json
+{
+  "archivo_origen": "planillas_torneo.pdf",
+  "transcripciones": [
+    {
+      "pagina": 1,
+      "target_id": "Portada",
+      "tipo_juego": "informacion",
+      "transcripcion": {
+        "arquero": "N/A (Hoja Informativa)",
+        "sin_puntos_registrados": true,
+        "observacion": "Hoja de Información / Portada (Descartada)",
+        "series": [],
+        "modelo_usado": "Descartado (Sin OCR)"
+      }
+    },
+    {
+      "pagina": 2,
+      "target_id": "A",
+      "tipo_juego": "clasificacion",
+      "transcripcion": {
+        "valido": true,
+        "arquero": "Leguiza Marcelo Gabriel",
+        "target": "1A",
+        "club": "TCAP",
+        "categoria": "R M",
+        "sin_puntos_registrados": false,
+        "series": [
+          {"serie": 1, "flechas": ["10", "9", "8"], "suma_parcial_escrita": 27}
+        ],
+        "totales_planilla": {"total_puntos": 247, "cant_10s": 4, "cant_9s": 6},
+        "modelo_usado": "nvidia:nemotron-3.5-parse"
+      }
+    }
+  ]
+}
+```
+
+---
+
+## 🤖 Agente 3: Validador Lógico y Reconciliador Matemático (v1)
+**Objetivo:** Recibir el JSON crudo del Agente 2, limpiar el ruido del OCR, verificar que las matemáticas cierren y determinar si los datos son confiables.
+
+### 🧹 1. Sanitización de Ruido OCR
+- Corrige errores típicos de lectura (ej: `"6X"` -> `6`, `"104"` -> `10`).
+- Normaliza letras: `X` (centro), `M` (miss / 0 puntos).
+
+### 📐 2. Diferenciación de Errores y Reconciliación
+- **Validación Serie por Serie:** Compara la suma de las flechas leídas contra la suma parcial escrita en el papel.
+- **Validación de Totales:** Compara el total oficial del pie de planilla contra la suma real de todas las flechas.
+- **Identidad:** Si el OCR no pudo leer el arquero, lo busca en un padrón usando el número de `target`.
+
+### 📊 3. Índice de Certeza y Auditoría
+Diferencia el estado de cada planilla en base a un **Score de Certeza (0% a 100%)**:
+- `APROBADO_AUTOMATICO` (≥ 90% de certeza, todo cierra matemáticamente).
+- `REVISION_RECOMENDADA` / `REQUIERE_REVISION_HUMANA` (hay discrepancias en las sumas).
+- `SIN_PUNTOS_CONFIRMADO` (la planilla estaba vacía).
+
+### 📄 Salida (Informe de Auditoría JSON)
+```json
+{
+  "archivo_origen": "planillas_torneo.pdf",
+  "resumen_auditoria": {
+    "total_cuadrantes_procesados": 2,
+    "aprobados_automaticos": 1,
+    "requiere_revision_humana": 0,
+    "sin_puntos_confirmados": 1
+  },
+  "resultados_auditados": [
+    {
+      "pagina": 2,
+      "target_id": "A",
+      "arquero": "Leguiza Marcelo Gabriel",
+      "target": "1A",
+      "matematica_valida": true,
+      "score_certeza": 100.0,
+      "estado_auditoria": "APROBADO_AUTOMATICO",
+      "totales_oficiales_planilla": {"total_puntos": 247, "cant_10s": 4, "cant_9s": 6},
+      "totales_calculados_series": {"total_puntos": 247, "cant_10s": 4, "cant_9s": 6},
+      "errores": [],
+      "advertencias": []
+    }
+  ]
+}
+```
