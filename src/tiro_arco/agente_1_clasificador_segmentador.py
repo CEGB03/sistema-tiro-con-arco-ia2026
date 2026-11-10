@@ -454,3 +454,50 @@ class AgenteClasificadorSegmentador:
         shutil.copy(rec["ruta_recorte_original"], rec["ruta_recorte"])
         rec["es_mejorado"] = False
         return True, f"↩️ Se restauró la versión original para '{label_recorte}'."
+
+
+    def mejorar_todas_las_paginas(self):
+        """ Aplica filtro de mejora de calidad sobre todas las páginas en caché. """
+        if not self.paginas_cache:
+            return False, "⚠️ No hay páginas cargadas en caché."
+
+        count = 0
+        for num_pag, pag in self.paginas_cache.items():
+            exito = ImageEnhancer.aplicar_mejora_calidad(pag["ruta_original"], pag["ruta_actual"])
+            if exito:
+                pag["es_mejorada"] = True
+                count += 1
+        return True, f"✨ Calidad mejorada con éxito para TODAS las páginas ({count} páginas)."
+
+    def deshacer_todas_las_paginas(self):
+        """ Restaura la versión original sin filtros para todas las páginas. """
+        if not self.paginas_cache:
+            return False, "⚠️ No hay páginas cargadas en caché."
+
+        for num_pag, pag in self.paginas_cache.items():
+            shutil.copy(pag["ruta_original"], pag["ruta_actual"])
+            pag["es_mejorada"] = False
+        return True, "↩️ Se restauró la versión original para TODAS las páginas."
+
+    def mejorar_todos_los_recortes(self):
+        """ Aplica filtro de mejora de calidad sobre todos los recortes de cuadrantes en caché. """
+        if not self.recortes_cache:
+            return False, "⚠️ No hay recortes cargados en caché."
+
+        count = 0
+        for label_recorte, rec in self.recortes_cache.items():
+            exito = ImageEnhancer.aplicar_mejora_calidad(rec["ruta_recorte_original"], rec["ruta_recorte"])
+            if exito:
+                rec["es_mejorado"] = True
+                count += 1
+        return True, f"✨ Calidad mejorada con éxito para TODOS los recortes ({count} recortes)."
+
+    def deshacer_todos_los_recortes(self):
+        """ Restaura la versión original sin filtros para todos los recortes. """
+        if not self.recortes_cache:
+            return False, "⚠️ No hay recortes cargados en caché."
+
+        for label_recorte, rec in self.recortes_cache.items():
+            shutil.copy(rec["ruta_recorte_original"], rec["ruta_recorte"])
+            rec["es_mejorado"] = False
+        return True, "↩️ Se restauró la versión original para TODOS los recortes."

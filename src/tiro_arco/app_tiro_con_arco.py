@@ -129,6 +129,38 @@ def deshacer_pagina_seleccionada(num_pagina):
 
 
 # --- PASO 1: SEGMENTACIÓN DE CUADRANTES ---
+
+
+def mejorar_todas_las_paginas_ui():
+    exito, msg = agente1.mejorar_todas_las_paginas()
+    paginas = list(agente1.paginas_cache.values())
+    galeria_paginas = []
+    choices_paginas = []
+    for p in paginas:
+        lbl = f"Página {p['numero_pagina']}" + (" (✨ Mejorada)" if p["es_mejorada"] else "")
+        choices_paginas.append((lbl, p["numero_pagina"]))
+        galeria_paginas.append((p["ruta_actual"], lbl))
+
+    primer_num = choices_paginas[0][1] if choices_paginas else None
+    img_actual = agente1.paginas_cache[primer_num]["ruta_actual"] if primer_num and primer_num in agente1.paginas_cache else None
+    return msg, galeria_paginas, gr.Dropdown(choices=choices_paginas, value=primer_num), img_actual
+
+
+def deshacer_todas_las_paginas_ui():
+    exito, msg = agente1.deshacer_todas_las_paginas()
+    paginas = list(agente1.paginas_cache.values())
+    galeria_paginas = []
+    choices_paginas = []
+    for p in paginas:
+        lbl = f"Página {p['numero_pagina']}" + (" (✨ Mejorada)" if p["es_mejorada"] else "")
+        choices_paginas.append((lbl, p["numero_pagina"]))
+        galeria_paginas.append((p["ruta_actual"], lbl))
+
+    primer_num = choices_paginas[0][1] if choices_paginas else None
+    img_actual = agente1.paginas_cache[primer_num]["ruta_actual"] if primer_num and primer_num in agente1.paginas_cache else None
+    return msg, galeria_paginas, gr.Dropdown(choices=choices_paginas, value=primer_num), img_actual
+
+
 def ejecutar_paso1_segmentacion(archivo_input, tipo_manual):
     if not agente1.paginas_cache and archivo_input:
         agente1.extraer_paginas_pdf_o_imagen(archivo_input.name)
@@ -239,6 +271,64 @@ def deshacer_recorte_seleccionado(label_recorte):
 
 
 # --- PASO 2: OCR ---
+
+
+def mejorar_todos_los_recortes_ui():
+    exito, msg = agente1.mejorar_todos_los_recortes()
+    galeria_cuadrantes = []
+    choices_cuadrantes = []
+    for k, rec in agente1.recortes_cache.items():
+        lbl_mejora = k + (" (✨ Mejorado)" if rec["es_mejorado"] else "")
+        choices_cuadrantes.append((lbl_mejora, k))
+        galeria_cuadrantes.append((rec["ruta_recorte"], lbl_mejora))
+
+    primer_key = choices_cuadrantes[0][1] if choices_cuadrantes else None
+    img_actual = agente1.recortes_cache[primer_key]["ruta_recorte"] if primer_key and primer_key in agente1.recortes_cache else None
+    return msg, galeria_cuadrantes, gr.Dropdown(choices=choices_cuadrantes, value=primer_key), img_actual
+
+
+def deshacer_todos_los_recortes_ui():
+    exito, msg = agente1.deshacer_todos_los_recortes()
+    galeria_cuadrantes = []
+    choices_cuadrantes = []
+    for k, rec in agente1.recortes_cache.items():
+        lbl_mejora = k + (" (✨ Mejorado)" if rec["es_mejorado"] else "")
+        choices_cuadrantes.append((lbl_mejora, k))
+        galeria_cuadrantes.append((rec["ruta_recorte"], lbl_mejora))
+
+    primer_key = choices_cuadrantes[0][1] if choices_cuadrantes else None
+    img_actual = agente1.recortes_cache[primer_key]["ruta_recorte"] if primer_key and primer_key in agente1.recortes_cache else None
+    return msg, galeria_cuadrantes, gr.Dropdown(choices=choices_cuadrantes, value=primer_key), img_actual
+
+
+def seleccionar_cuadrantes_validos_ui(manifiesto_1):
+    if not manifiesto_1:
+        return gr.CheckboxGroup(value=[])
+    tareas = manifiesto_1.get("tareas_agente2", [])
+    validos = []
+    for t in tareas:
+        lbl = t.get("label", f"Pág {t.get('pagina')} - Pos {t.get('target_id')}")
+        tipo_juego = t.get("tipo_juego", "clasificacion")
+        es_elim = (tipo_juego == "eliminatoria")
+        es_info = t.get("es_pagina_informacion", False) or tipo_juego in ["info", "informacion", "portada"] or es_elim
+        es_vacio = t.get("es_cuadrante_vacio", False)
+        if not es_info and not es_vacio:
+            validos.append(lbl)
+    return gr.CheckboxGroup(value=validos)
+
+
+def seleccionar_todos_cuadrantes_ui(manifiesto_1):
+    if not manifiesto_1:
+        return gr.CheckboxGroup(value=[])
+    tareas = manifiesto_1.get("tareas_agente2", [])
+    todos = [t.get("label", f"Pág {t.get('pagina')} - Pos {t.get('target_id')}") for t in tareas]
+    return gr.CheckboxGroup(value=todos)
+
+
+def desmarcar_todos_cuadrantes_ui():
+    return gr.CheckboxGroup(value=[])
+
+
 def ejecutar_paso2_ocr(seleccionados, manifiesto_1, manifiesto_2_previo):
     empty_audit_json = json.dumps({"info": "Haz clic en Paso 3 abajo para auditar los resultados."}, indent=2, ensure_ascii=False)
 
@@ -483,9 +573,9 @@ def inspeccionar_auditoria(opcion_seleccionada, manifiesto_3):
 
 # --- CONSTRUCCIÓN DE LA INTERFAZ WEB GRADIO ---
 def build_ui():
-    with gr.Blocks(title="🎯 Sistema Multi-Agente - Tiro con Arco (v67)") as demo:
-        gr.Markdown("# 🎯 Sistema Multi-Agente - Tiro con Arco (v67 - Pre-OCR de Página y Recortes Interactivos)")
-        gr.Markdown("Flujo de Alta Precisión: **Paso 0** (Carga + Render HD scale=3 + Pre-OCR de Página Completa) ➡️ **Paso 1** (Segmentación con Pre-OCR) ➡️ **Paso 2** (OCR 100% Sincronizado + Miniaturas Clickables en Pestaña Nueva) ➡️ **Paso 3** (Auditoría Lógica y Deducción).")
+    with gr.Blocks(title="🎯 Sistema Multi-Agente - Tiro con Arco (v68)") as demo:
+        gr.Markdown("# 🎯 Sistema Multi-Agente - Tiro con Arco (v68 - Mejoras Masivas de Calidad y Control Checkbox)")
+        gr.Markdown("Flujo de Alta Usabilidad: **Paso 0** (Carga + Mejora Masiva de Páginas) ➡️ **Paso 1** (Segmentación + Mejora Masiva de Recortes) ➡️ **Paso 2** (Selección Masiva Checkbox + OCR 100% Sincronizado) ➡️ **Paso 3** (Auditoría Lógica y Deducción).")
 
         state_manifiesto_1 = gr.State(None)
         state_manifiesto_2 = gr.State(None)
@@ -504,13 +594,21 @@ def build_ui():
                 gr.Markdown("---")
                 gr.Markdown("### 🛠️ Inspección y Mejora de Páginas (Paso 0)")
                 dropdown_paginas = gr.Dropdown(choices=[], label="🔍 Seleccionar Página a Inspeccionar/Mejorar")
-                btn_mejorar_pag = gr.Button("✨ Mejorar Calidad de Página Seleccionada")
-                btn_deshacer_pag = gr.Button("↩️ Deshacer Mejora de Página Seleccionada")
+                with gr.Row():
+                    btn_mejorar_pag = gr.Button("✨ Mejorar Página Seleccionada")
+                    btn_deshacer_pag = gr.Button("↩️ Deshacer Página Seleccionada")
+                with gr.Row():
+                    btn_mejorar_todas_pag = gr.Button("✨ Mejorar TODAS las Páginas", variant="secondary")
+                    btn_deshacer_todas_pag = gr.Button("↩️ Deshacer TODAS las Páginas", variant="secondary")
                 btn_paso1 = gr.Button("✂️ Paso 1: Dividir Cuadrantes en Páginas", variant="primary")
 
                 gr.Markdown("---")
                 gr.Markdown("### 👁️ Selección y OCR (Paso 2)")
                 checkbox_cuadrantes = gr.CheckboxGroup(choices=[], label="Seleccionar Cuadrantes Organizados por Página (Paso 2)")
+                with gr.Row():
+                    btn_seleccionar_validos = gr.Button("🎯 Seleccionar Cuadrantes Válidos", variant="primary")
+                    btn_seleccionar_todos = gr.Button("☑️ Seleccionar Todos", variant="secondary")
+                    btn_desmarcar_todos = gr.Button("☐ Desmarcar Todos", variant="secondary")
                 btn_paso2 = gr.Button("👁️ Paso 2: Ejecutar OCR en Seleccionados", variant="secondary")
 
                 gr.Markdown("---")
@@ -531,8 +629,11 @@ def build_ui():
                     visor_cuadrante_out = gr.Image(label="🖼️ Visor de Recorte de Cuadrante", interactive=False)
 
                 with gr.Row():
-                    btn_mejorar_recorte = gr.Button("✨ Mejorar Calidad de Recorte Seleccionado")
-                    btn_deshacer_recorte = gr.Button("↩️ Deshacer Mejora de Recorte Seleccionado")
+                    btn_mejorar_recorte = gr.Button("✨ Mejorar Recorte Seleccionado")
+                    btn_deshacer_recorte = gr.Button("↩️ Deshacer Recorte Seleccionado")
+                with gr.Row():
+                    btn_mejorar_todos_recortes = gr.Button("✨ Mejorar TODOS los Recortes", variant="secondary")
+                    btn_deshacer_todos_recortes = gr.Button("↩️ Deshacer TODOS los Recortes", variant="secondary")
 
                 json_out = gr.Code(label="Manifiesto JSON Completo (Agente 1 + Agente 2 + Agente 3)", language="json")
 
@@ -589,6 +690,18 @@ def build_ui():
             outputs=[status_paso0, galeria_paginas_out, dropdown_paginas, visor_pagina_out]
         )
 
+        btn_mejorar_todas_pag.click(
+            fn=mejorar_todas_las_paginas_ui,
+            inputs=[],
+            outputs=[status_paso0, galeria_paginas_out, dropdown_paginas, visor_pagina_out]
+        )
+
+        btn_deshacer_todas_pag.click(
+            fn=deshacer_todas_las_paginas_ui,
+            inputs=[],
+            outputs=[status_paso0, galeria_paginas_out, dropdown_paginas, visor_pagina_out]
+        )
+
         btn_paso1.click(
             fn=ejecutar_paso1_segmentacion,
             inputs=[file_input, tipo_manual],
@@ -614,6 +727,36 @@ def build_ui():
             fn=deshacer_recorte_seleccionado,
             inputs=[dropdown_cuadrantes],
             outputs=[status_paso0, galeria_cuadrantes_out, dropdown_cuadrantes, visor_cuadrante_out]
+        )
+
+        btn_mejorar_todos_recortes.click(
+            fn=mejorar_todos_los_recortes_ui,
+            inputs=[],
+            outputs=[status_paso0, galeria_cuadrantes_out, dropdown_cuadrantes, visor_cuadrante_out]
+        )
+
+        btn_deshacer_todos_recortes.click(
+            fn=deshacer_todos_los_recortes_ui,
+            inputs=[],
+            outputs=[status_paso0, galeria_cuadrantes_out, dropdown_cuadrantes, visor_cuadrante_out]
+        )
+
+        btn_seleccionar_validos.click(
+            fn=seleccionar_cuadrantes_validos_ui,
+            inputs=[state_manifiesto_1],
+            outputs=[checkbox_cuadrantes]
+        )
+
+        btn_seleccionar_todos.click(
+            fn=seleccionar_todos_cuadrantes_ui,
+            inputs=[state_manifiesto_1],
+            outputs=[checkbox_cuadrantes]
+        )
+
+        btn_desmarcar_todos.click(
+            fn=desmarcar_todos_cuadrantes_ui,
+            inputs=[],
+            outputs=[checkbox_cuadrantes]
         )
 
         btn_paso2.click(
@@ -648,7 +791,7 @@ def build_ui():
 
 def main():
     print("=" * 60)
-    print("🚀 Servidor Principal Multi-Agente (v67) - Tiro con Arco")
+    print("🚀 Servidor Principal Multi-Agente (v68) - Tiro con Arco")
     print("🌍 Abre tu navegador en: http://localhost:7860")
     print("=" * 60)
     demo = build_ui()

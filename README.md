@@ -11,9 +11,9 @@ sistema-tiro-con-arco-ia2026/
 ├── LICENSE ← Licencia del proyecto (ej. MIT)
 ├── src/ ← Código fuente modular del proyecto
 │    ├── __init__.py 
-│    ├── agente_1_clasificador_segmentador.py ← Agente 1 (Segmentación visual OpenCV/Pillow)
-│    ├── agente_2_ocr_extractor.py ← Agente 2 (Digitaliza los valores de cada cuadrante de planilla)
-│    ├── agente_3_validador_concilliador.py ← Agente 3 (Valida los valores de flechas)
+│    ├── agente_1_clasificador_segmentador.py ← Agente 1 (Segmentación visual OpenCV/Pillow + Pre-OCR + Render 300 DPI)
+│    ├── agente_2_ocr_extractor.py ← Agente 2 (Digitaliza los valores con NVIDIA NIM, LLM Refactorizer u Ollama local)
+│    ├── agente_3_validador_conciliador.py ← Agente 3 (Valida la matemática, deduce números ilegibles y reconcilia totales)
 │    └── app_tiro_con_arco.py ← Interfaz principal / Orquestador Gradio
 ├── notebooks/ ← Pruebas de exploración / evaluación 
 │    └── exploracion_y_evaluacion_ocr.ipynb 
@@ -33,6 +33,7 @@ sistema-tiro-con-arco-ia2026/
      ├── img/ ← Capturas de pantalla de la interfaz Gradio y diagramas 
      └── assets/ ← CSS/JS auxiliares para la web estática
 ```
+
 ---
 
 ## 🚀 Método de Ejecución Recomendado con Docker (Orquestado)
@@ -111,19 +112,25 @@ uv run tiro-con-arco
 ---
 
 # 🖥️ Interfaz Web Gradio
-* **Flujo Interactivo en 2 Pasos:**
-  * **Paso 1 (Segmentación):** Procesa el documento y muestra los cuadrantes recortados.
-  * **Paso 2 (OCR e Inspección):** Ejecuta el OCR en los cuadrantes seleccionados y presenta una **tabla diagnóstica enriquecida** que incluye la **vista previa del recorte visual** en cada fila de la tabla junto a la información del arquero, diana, club y motor de inferencia utilizado.
+* **Flujo Interactivo en 4 Pasos con Control Humano (Human-in-the-loop):**
+  * **Paso 0 (Carga y Renderizado):** Convierte los PDFs a 300 DPI para máxima nitidez. Permite aplicar mejoras de contraste (CLAHE) por página y **Deshacer** (Undo) si es necesario. Muestra una galería de las páginas físicas.
+  * **Paso 1 (Segmentación):** Procesa el documento, clasifica las páginas (info/eliminatoria/clasificación) y divide los cuadrantes. Aplica solape de 20px para no cortar nombres. Permite mejorar recortes individuales.
+  * **Paso 2 (OCR e Inspección):** Ofrece selección masiva con checkboxes. Ejecuta el OCR y presenta una tabla con vista previa, además de un visor de texto en crudo (LaTeX de Nemotron vs JSON parseado).
+  * **Paso 3 (Auditoría):** El Agente 3 evalúa la matemática, deduce números ilegibles y arroja un **Score de Certeza** por cada arquero.
 
 ***
 
 # Agentes
 
-## 🤖 Agente 1: Clasificador y Segmentador Semántico (v17)
+## 🤖 Agente 1: Clasificador y Segmentador Semántico (v28)
 **Objetivo:** Recibir el archivo de entrada (**PDF multipágina** o **Imagen PNG/JPG**), procesar página por página y segmentar las planillas de arqueros. Utiliza una regla estricta de **homogeneidad documental** y descarte de hojas sin datos.
 
-### 🧠 Opciones de Diferenciación (Clasificación, Eliminatoria e Información)
-El Agente 1 no adivina; utiliza visión por computadora (OpenCV) y reglas de negocio para diferenciar el tipo de documento:
+### 🧠 Opciones de Diferenciación y Pre-OCR
+El Agente 1 no adivina; utiliza visión por computadora (OpenCV), renderizado de alta calidad y reglas de negocio para diferenciar el tipo de documento:
+- **Renderizado Ultra-HD:** Convierte los PDFs a imágenes a **300 DPI** (`scale=4.1667`) para evitar la borrosidad en tablas manuscritas.
+- **Micro-OCR de Diferenciación:** Ejecuta Tesseract a nivel de página completa buscando palabras clave antes de hacer los cortes:
+  - Si detecta `Ganador`, `Set Point`, `Oro/Bronce`, `S.O.`, clasifica la hoja como **Eliminatoria**.
+  - Si detecta `Turno:`, `18m-1`, `Ronda`, o distancias específicas, clasifica la hoja como **Clasificación**.
 - **Descarte de Hoja Completa (`informacion` / `portada`):** Si la página no contiene una tabla de tiros (detección de grillas con morfología de líneas) o si, aun teniéndola, la evaluación de densidad de tinta confirma que **todos los cuadrantes están vacíos** (sin anotaciones manuscritas), se descarta la hoja completa. Se genera un solo recorte de la página entera, sin dividir en cuadrantes.
 - **Homogeneidad Documental (`clasificacion` vs `eliminatoria`):** Si la página sí tiene anotaciones, se clasifica de forma **homogénea** para toda la hoja. Si el layout se detecta como 4 arqueros, los 4 recortes serán de `clasificacion`. Si es de 2 arqueros, será de `eliminatoria`. **Nunca se mezclan tipos de juego en una misma página.**
 - **Cuadrantes Vacíos Parciales:** Si una planilla es de 4 arqueros pero uno solo está en blanco, ese recorte se marca con `es_cuadrante_vacio: True`, pero conserva el `tipo_juego: clasificacion` para mantener la coherencia.
@@ -148,7 +155,8 @@ El Agente 1 no adivina; utiliza visión por computadora (OpenCV) y reglas de neg
       "label": "Pág 1 - Hoja de Información / Portada",
       "es_pagina_informacion": true,
       "es_cuadrante_vacio": false,
-      "razon_preclasificacion": "Sin tabla de tiros en la hoja / Hoja Informativa"
+      "razon_preclasificacion": "Sin tabla de tiros en la hoja / Hoja Informativa",
+      "es_mejorado": false
     },
     {
       "pagina": 2,
@@ -159,7 +167,8 @@ El Agente 1 no adivina; utiliza visión por computadora (OpenCV) y reglas de neg
       "label": "Pág 2 - Pos A",
       "es_pagina_informacion": false,
       "es_cuadrante_vacio": false,
-      "razon_preclasificacion": "Contiene datos anotados"
+      "razon_preclasificacion": "Contiene datos anotados",
+      "es_mejorado": true
     }
   ]
 }
@@ -167,8 +176,8 @@ El Agente 1 no adivina; utiliza visión por computadora (OpenCV) y reglas de neg
 
 ---
 
-## 🤖 Agente 2: Preprocesador y Extractor OCR Multimodal (v47)
-**Objetivo:** Tomar los recortes del Agente 1, preprocesar la imagen y transcribir los datos utilizando una **cadena de fallback** entre APIs en la nube y modelos locales.
+## 🤖 Agente 2: Preprocesador y Extractor OCR Multimodal (v56)
+**Objetivo:** Tomar los recortes del Agente 1, preprocesar la imagen y transcribir los datos utilizando una **cadena de fallback** entre APIs en la nube y modelos locales, con refactorización secundaria.
 
 ### 🎨 1. Pipeline de Preprocesamiento (OpenCV)
 - **Realce (CLAHE):** Resalta la tinta manuscrita frente a las sombras del escaneo.
@@ -179,9 +188,12 @@ El Agente 1 no adivina; utiliza visión por computadora (OpenCV) y reglas de neg
 El Agente 2 diferencia entre recortes de planillas reales y hojas de información.
 - **Si `es_pagina_informacion` es True:** Omite el OCR inmediatamente (ahorra cuota y tiempo) y devuelve un JSON marcado como `Descartado (Sin OCR)`.
 - **Si es una planilla real:** Intenta secuencialmente:
-  1. **NVIDIA Nemotron Parse (API):** Usa el endpoint `/retrieval/nvidia/nemotron-3.5-parse/parse`. Extrae la tabla en formato LaTeX y el código la parsea a JSON.
-  2. **Ollama Local (Fallback):** Modelos como `qwen2.5-vl` o `deepseek-ocr`.
-  3. **Tesseract OCR:** Como último recurso de texto tradicional.
+  1. **NVIDIA Nemotron Parse (API):** Usa el endpoint `/retrieval/nvidia/nemotron-3.5-parse/parse`. Extrae la tabla en formato LaTeX.
+  2. **Refactorización Secundaria (LLM):** Si el LaTeX de Nemotron es complejo, invoca a `meta/llama-3.1-70b-instruct` para forzar la conversión a un JSON perfecto.
+  3. **Ollama Local (Fallback):** Modelos como `qwen2.5-vl` o `deepseek-ocr`.
+  4. **Tesseract OCR:** Como último recurso de texto tradicional.
+
+*Nota:* El agente genera automáticamente un archivo de auditoría (`auditoria_nemotron_raw_vs_refactorizado.json`) comparando el texto en crudo contra el JSON final.
 
 ### 📄 Salida (Manifiesto JSON)
 ```json
@@ -215,7 +227,7 @@ El Agente 2 diferencia entre recortes de planillas reales y hojas de informació
           {"serie": 1, "flechas": ["10", "9", "8"], "suma_parcial_escrita": 27}
         ],
         "totales_planilla": {"total_puntos": 247, "cant_10s": 4, "cant_9s": 6},
-        "modelo_usado": "nvidia:nemotron-3.5-parse"
+        "modelo_usado": "nvidia:nemotron-3.5-parse + llm-refactorer:llama-3.1-70b"
       }
     }
   ]
@@ -224,17 +236,18 @@ El Agente 2 diferencia entre recortes de planillas reales y hojas de informació
 
 ---
 
-## 🤖 Agente 3: Validador Lógico y Reconciliador Matemático (v1)
-**Objetivo:** Recibir el JSON crudo del Agente 2, limpiar el ruido del OCR, verificar que las matemáticas cierren y determinar si los datos son confiables.
+## 🤖 Agente 3: Validador Lógico y Reconciliador Matemático (v5)
+**Objetivo:** Recibir el JSON crudo del Agente 2, limpiar el ruido del OCR, verificar que las matemáticas cierren y deducir números ilegibles basándose en el contexto y las reglas de tiro con arco.
 
-### 🧹 1. Sanitización de Ruido OCR
-- Corrige errores típicos de lectura (ej: `"6X"` -> `6`, `"104"` -> `10`).
-- Normaliza letras: `X` (centro), `M` (miss / 0 puntos).
+### 🧹 1. Sanitización y Deducción
+- **Ruido OCR:** Corrige lecturas típicas como `"6X"` -> `6`, o `"104"` -> `10`.
+- **Deducción de Flechas Ilegibles:** Si la IA lee `[2, 3, 'U']` y la suma escrita en el papel es `9`, el Agente 3 deduce automáticamente que `'U'` es un `4`.
+- **Confusión 15 vs 16:** Si detecta una flecha leída como 6 pero el total escrito de la serie es 15, asume que el OCR leyó mal y corrige la flecha a 5.
 
-### 📐 2. Diferenciación de Errores y Reconciliación
-- **Validación Serie por Serie:** Compara la suma de las flechas leídas contra la suma parcial escrita en el papel.
-- **Validación de Totales:** Compara el total oficial del pie de planilla contra la suma real de todas las flechas.
-- **Identidad:** Si el OCR no pudo leer el arquero, lo busca en un padrón usando el número de `target`.
+### 📐 2. Reconciliación Matemática y Modalidad
+- **Validación Serie por Serie y Totales:** Compara la suma de las flechas contra la suma parcial escrita y contra el total del pie de página.
+- **Lógica de Sala vs Aire Libre:** En Sala (Indoor), agrupa el conteo de `10s` como `(X + 10)`. En Aire Libre (Outdoor), diferencia los `10s` puros de las `Xs`.
+- **Deducción de Totales Faltantes:** Si el recuadro del total general no fue leído por el OCR, el Agente 3 lo deduce a partir del total acumulado escrito en la última serie.
 
 ### 📊 3. Índice de Certeza y Auditoría
 Diferencia el estado de cada planilla en base a un **Score de Certeza (0% a 100%)**:
@@ -261,10 +274,22 @@ Diferencia el estado de cada planilla en base a un **Score de Certeza (0% a 100%
       "matematica_valida": true,
       "score_certeza": 100.0,
       "estado_auditoria": "APROBADO_AUTOMATICO",
-      "totales_oficiales_planilla": {"total_puntos": 247, "cant_10s": 4, "cant_9s": 6},
-      "totales_calculados_series": {"total_puntos": 247, "cant_10s": 4, "cant_9s": 6},
+      "total_oficial_estado": "DEDUCIDO_ULTIMA_SERIE",
+      "totales_oficiales_planilla": {"total_puntos": 247, "cant_10s": 4, "cant_9s": 6, "cant_xs": 0},
+      "totales_calculados_series": {"total_puntos": 247, "cant_10s_totales": 4, "cant_10s_puras": 4, "cant_9s": 6},
+      "deducciones_realizadas": [
+        {
+          "serie": 4,
+          "original": "U",
+          "deducido": "4",
+          "diferencia_calculada": 4
+        }
+      ],
       "errores": [],
-      "advertencias": []
+      "advertencias": [
+        "💡 Total en papel (247 pts) deducido del acumulado escrito en la última serie",
+        "💡 Serie 4: Flecha ilegible 'U' deducida automáticamente como '4' (Suma escrita 26 - parcial = 4)"
+      ]
     }
   ]
 }
