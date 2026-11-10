@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🤖 Agente 1 (v26): Clasificador y Segmentador Semántico con Pre-OCR de Página Completa y Renderizado en Alta Resolución.
-- Renderizado de PDF a escala 3 (Alta Definición ~2500x3500px) para máxima nitidez de grillas y OCR.
-- Pre-OCR de Página Completa ANTES de segmentar en cuadrantes: clasifica con máxima precisión eliminatorias y portadas descartables vs rondas de clasificación.
-- Reseteo completo de cachés de páginas y recortes.
-- Pipeline Interactivo: Inspección y mejora de calidad por página y por recorte individual con opción de Deshacer (Undo).
+🤖 Agente 1 (v28): Clasificador y Segmentador Semántico con Renderizado PDF Ultra-HD 300 DPI y Pre-OCR:
+- Renderiza PDFs a resolución Ultra-HD de 300 DPI (scale=4.1667) para eliminar borrosidad en tablas y números manuscritos.
+- Resetea caches de páginas y recortes al cargar nuevos documentos.
+- Pre-OCR de página completa para filtrado infalible de descartes (Portadas / Eliminatorias).
+- Mejora de calidad individual de páginas y recortes con opción de Deshacer (Undo).
 """
 
 import os
@@ -80,27 +80,12 @@ class AgenteClasificadorSegmentador:
         self.paginas_cache = {}
         self.recortes_cache = {}
 
-    def ejecutar_pre_ocr_pagina(self, img_path):
-        """ Ejecuta un OCR completo a nivel de página sobre la imagen antes de recortar. """
-        if not OCR_SUPPORT or not os.path.exists(img_path):
-            return ""
-        try:
-            img = Image.open(img_path)
-            w, h = img.size
-            if max(w, h) < 1600:
-                scale = 1600.0 / float(max(w, h))
-                img = img.resize((int(w * scale), int(h * scale)), Image.Resampling.LANCZOS)
-            return pytesseract.image_to_string(img, lang="spa+eng")
-        except Exception:
-            return ""
-
     def extraer_paginas_pdf_o_imagen(self, ruta_archivo):
-        """ Convierte PDF o Imagen en páginas independientes en alta definición con Pre-OCR. """
+        """ Convierte PDF o Imagen en páginas independientes en Ultra-HD (300 DPI). """
         if not os.path.exists(ruta_archivo):
             raise FileNotFoundError(f"El archivo '{ruta_archivo}' no existe.")
 
         self.reset_caches()
-
         es_pdf = ruta_archivo.lower().endswith('.pdf')
         paginas_info = []
 
@@ -109,22 +94,28 @@ class AgenteClasificadorSegmentador:
                 raise ImportError("Se requiere 'pypdfium2' para procesar archivos PDF.")
             doc = pdfium.PdfDocument(ruta_archivo)
             for i, page in enumerate(doc):
-                # Render at high resolution scale=3 for sharp text and table grid lines
-                bitmap = page.render(scale=3)
+                # ULTRA HIGH DEFINITION: Renderizado a 300 DPI (scale=4.1667 => 72*4.1667 = 300 DPI)
+                bitmap = page.render(scale=4.1667)
                 pil_img = bitmap.to_pil()
                 img_orig_path = os.path.join(self.output_dir, f"pagina_{i+1}_orig.png")
                 img_act_path = os.path.join(self.output_dir, f"pagina_{i+1}_actual.png")
-                pil_img.save(img_orig_path, "PNG")
-                pil_img.save(img_act_path, "PNG")
+                pil_img.save(img_orig_path, "PNG", compress_level=0)
+                pil_img.save(img_act_path, "PNG", compress_level=0)
 
-                ocr_texto = self.ejecutar_pre_ocr_pagina(img_act_path)
+                # Pre-OCR de página completa en alta resolución
+                text_page_raw = ""
+                if OCR_SUPPORT:
+                    try:
+                        text_page_raw = pytesseract.image_to_string(pil_img, lang="spa+eng")
+                    except Exception:
+                        pass
 
                 pag_data = {
                     "numero_pagina": i + 1,
                     "ruta_original": img_orig_path,
                     "ruta_actual": img_act_path,
-                    "pre_ocr_texto": ocr_texto,
-                    "es_mejorada": False
+                    "es_mejorada": False,
+                    "pre_ocr_texto": text_page_raw
                 }
                 self.paginas_cache[i + 1] = pag_data
                 paginas_info.append(pag_data)
@@ -134,14 +125,20 @@ class AgenteClasificadorSegmentador:
             shutil.copy(ruta_archivo, img_orig_path)
             shutil.copy(ruta_archivo, img_act_path)
 
-            ocr_texto = self.ejecutar_pre_ocr_pagina(img_act_path)
+            text_page_raw = ""
+            if OCR_SUPPORT:
+                try:
+                    pil_img = Image.open(ruta_archivo)
+                    text_page_raw = pytesseract.image_to_string(pil_img, lang="spa+eng")
+                except Exception:
+                    pass
 
             pag_data = {
                 "numero_pagina": 1,
                 "ruta_original": img_orig_path,
                 "ruta_actual": img_act_path,
-                "pre_ocr_texto": ocr_texto,
-                "es_mejorada": False
+                "es_mejorada": False,
+                "pre_ocr_texto": text_page_raw
             }
             self.paginas_cache[1] = pag_data
             paginas_info.append(pag_data)
@@ -161,8 +158,6 @@ class AgenteClasificadorSegmentador:
         exito = ImageEnhancer.aplicar_mejora_calidad(pag["ruta_original"], pag["ruta_actual"])
         if exito:
             pag["es_mejorada"] = True
-            # Re-ejecutar Pre-OCR con la página mejorada
-            pag["pre_ocr_texto"] = self.ejecutar_pre_ocr_pagina(pag["ruta_actual"])
             return True, f"✨ Calidad mejorada con éxito para Página {num_pag}."
         return False, f"⚠️ Error al procesar la mejora para Página {num_pag}."
 
@@ -178,8 +173,7 @@ class AgenteClasificadorSegmentador:
         pag = self.paginas_cache[num_pag]
         shutil.copy(pag["ruta_original"], pag["ruta_actual"])
         pag["es_mejorada"] = False
-        pag["pre_ocr_texto"] = self.ejecutar_pre_ocr_pagina(pag["ruta_actual"])
-        return True, f"↩️ Se restauró la versión original para Página {num_pagina}."
+        return True, f"↩️ Se restauró la versión original para Página {num_pag}."
 
     @staticmethod
     def tiene_tabla_de_tiros(ruta_imagen):
@@ -236,6 +230,58 @@ class AgenteClasificadorSegmentador:
 
         return (ratio < 0.0003) or (ink_count < 25)
 
+    @staticmethod
+    def ejecutar_micro_ocr_cabecera(ruta_imagen, pre_ocr_texto=""):
+        if not OCR_SUPPORT or not os.path.exists(ruta_imagen):
+            return "indefinido", []
+
+        try:
+            if pre_ocr_texto and len(pre_ocr_texto) > 10:
+                text_lower = pre_ocr_texto.lower()
+            else:
+                img = Image.open(ruta_imagen)
+                w, h = img.size
+                if max(w, h) > 1600:
+                    scale = 1600.0 / float(max(w, h))
+                    img = img.resize((int(w * scale), int(h * scale)), Image.Resampling.LANCZOS)
+                text_lower = pytesseract.image_to_string(img, lang="spa+eng").lower()
+
+            hallazgos_clas = []
+            hallazgos_elim = []
+
+            pat_dist_clas = r'\b(?:10|15|18|20|30|40|50|60|70)\s*(?:m|mts|metros)?\s*[\-\_]?\s*[12]\b|\bturno\s*:?\s*[12]\b|\bronda\s*:?\s*[12]\b'
+            m_clas = re.findall(pat_dist_clas, text_lower)
+            if m_clas:
+                hallazgos_clas.extend(m_clas)
+
+            keywords_llaves_strict = [
+                r'1/16\s*final', r'1/8\s*final', r'1/4\s*final', r'1/2\s*final', r'\boro\b', r'\bbronce\b',
+                r'\bbronze\b', r'\bgold\b', r'semifinal', r'cuartos', r'octavos', r'16vos', r'8vos', r'4tos', r'final'
+            ]
+            keywords_sets_strict = [
+                r'set\s*total', r'set\s*point', r'total\s*set\s*point', r'puntos\s*de\s*set',
+                r'\bp\.s\.\b', r'\bs\.p\.\b', r'\bsets\b', r'sot\s*point'
+            ]
+            keywords_compuesto_elim = [
+                r'\bdes\.\b', r'desempate', r'total\s*set', r'\bs\.o\.\b', r'\bso\b',
+                r'puesto', r'ganador', r'duelo', r'eliminac', r'match'
+            ]
+
+            for pat in keywords_llaves_strict + keywords_sets_strict + keywords_compuesto_elim:
+                if re.search(pat, text_lower):
+                    hallazgos_elim.append(pat.replace(r'\b', '').replace(r'\s*', ' '))
+
+            if hallazgos_clas and not hallazgos_elim:
+                return "clasificacion", hallazgos_clas
+            elif hallazgos_elim and not hallazgos_clas:
+                return "eliminatoria", hallazgos_elim
+            elif hallazgos_clas and hallazgos_elim:
+                return "clasificacion", hallazgos_clas
+
+            return "indefinido", []
+        except Exception:
+            return "indefinido", []
+
     def analizar_layout(self, ruta_imagen, tipo_juego_manual=None, pre_ocr_texto=""):
         filename = os.path.basename(ruta_imagen).lower()
 
@@ -252,55 +298,44 @@ class AgenteClasificadorSegmentador:
             elif "clasificacion_4" in m or "4_arqueros" in m:
                 return "clasificacion", "4_arqueros"
 
-        # Pre-OCR de página si no viene suministrado
-        text_raw = pre_ocr_texto or self.ejecutar_pre_ocr_pagina(ruta_imagen)
-        text_lower = text_raw.lower()
-
-        # 1. Detectar Eliminatorias (Descarte automático de rondas de duelos/eliminación)
-        keywords_llaves_strict = [
-            r'1/16\s*final', r'1/8\s*final', r'1/4\s*final', r'1/2\s*final', r'\boro\b', r'\bbronce\b',
-            r'\bbronze\b', r'\bgold\b', r'semifinal', r'cuartos', r'octavos', r'16vos', r'8vos', r'4tos',
-            r'set\s*total', r'set\s*point', r'total\s*set\s*point', r'puntos\s*de\s*set', r'sot\s*point',
-            r'desempate', r'total\s*set', r'match', r'encuentro\s*final'
-        ]
-        keywords_fn_elim = ["duelo", "eliminac", "1-8", "1-4", "1-2", "oro", "bronce"]
-        is_elim = any(re.search(pat, text_lower) for pat in keywords_llaves_strict) or any(kw in filename for kw in keywords_fn_elim)
-        if is_elim:
+        keywords_eliminatoria_fn = ["puesto", "s.o.", "so", "ganador", "duelo", "eliminac", "1-8", "1-4", "1-2", "oro", "bronce"]
+        if any(kw in filename for kw in keywords_eliminatoria_fn):
             return "eliminatoria", "2_arqueros"
 
-        # 2. Detectar Clasificación (Rondas de ranking de 10 series)
-        pat_dist_clas = r'\b(?:10|15|18|20|30|40|50|60|70)\s*(?:m|mts|metros)?\s*[\-\_]?\s*[12]\b|\bturno\s*:?\s*[12]\b|\bronda\s*:?\s*[12]\b'
-        is_clas = bool(re.search(pat_dist_clas, text_lower))
-
-        # 3. Geometría y Aspect Ratio
-        img_pil = Image.open(ruta_imagen)
-        w, h = img_pil.size
-
-        if "4-arqueros" in filename or "4arqueros" in filename:
+        if any(p in filename for p in ["4-arqueros", "4arqueros"]):
             return "clasificacion", "4_arqueros"
 
-        pattern_1_arquero = r'^(?:[0-9]{1,2}[a-d])[\_\-]|(?:crop|recorte|individual|1[-_]arquero|1arquero)'
-        if re.search(pattern_1_arquero, filename) or (w < 750 and h < 850):
-            return "clasificacion", "1_arquero"
-
-        if is_clas:
+        tipo_ocr, hallazgos = self.ejecutar_micro_ocr_cabecera(ruta_imagen, pre_ocr_texto=pre_ocr_texto)
+        if tipo_ocr == "clasificacion":
+            print(f"[Agente 1] 🎯 Clasificación detectada por marca de distancia/turno en '{os.path.basename(ruta_imagen)}' ({hallazgos})")
+            pil_img = Image.open(ruta_imagen)
+            w, h = pil_img.size
             if w > h * 1.15:
                 return "clasificacion", "2_arqueros"
             return "clasificacion", "4_arqueros"
+        elif tipo_ocr == "eliminatoria":
+            print(f"[Agente 1] 🎯 Eliminatoria detectada por Micro-OCR en '{os.path.basename(ruta_imagen)}' ({hallazgos})")
+            return "eliminatoria", "2_arqueros"
+
+        pil_img = Image.open(ruta_imagen)
+        w, h = pil_img.size
 
         if w > h * 1.15:
             return "eliminatoria", "2_arqueros"
 
+        pattern_1_arquero = r'^(?:[0-9]{1,2}[a-d])[\_\-]|(?:crop|recorte|individual|1[-_]arquero|1arquero)'
+        if re.search(pattern_1_arquero, filename):
+            return "clasificacion", "1_arquero"
+
+        if w < 750 and h < 850:
+            return "clasificacion", "1_arquero"
+
         return "clasificacion", "4_arqueros"
 
     def procesar_documento(self, ruta_archivo, tipo_juego_manual=None, page_overrides=None):
-        """
-        Segmenta el documento en recortes de cuadrantes basándose en las imágenes actuales de página.
-        """
         if not self.paginas_cache:
             self.extraer_paginas_pdf_o_imagen(ruta_archivo)
 
-        # RESETS RECORTES CACHE TO PREVENT ACCUMULATING STALE CROPS FROM PREVIOUS RUNS
         self.recortes_cache = {}
 
         manifiesto = {
@@ -353,18 +388,12 @@ class AgenteClasificadorSegmentador:
                 img.save(crop_orig_path, "PNG")
                 img.save(crop_act_path, "PNG")
 
-                if es_elim:
-                    task_key = f"Pág {num_pag} - Eliminatoria"
-                    tipo_j = "eliminatoria"
-                else:
-                    task_key = f"Pág {num_pag} - Hoja de Información / Portada"
-                    tipo_j = "informacion"
-
+                task_key = f"Pág {num_pag} - {'Eliminatoria' if es_elim else 'Hoja de Información / Portada'}"
                 crop_info = {
                     "pagina": num_pag,
                     "target_id": "Portada",
-                    "tipo_juego": tipo_j,
-                    "layout": "portada" if not es_elim else "2_arqueros",
+                    "tipo_juego": tipo_juego_pagina if es_elim else "informacion",
+                    "layout": "portada",
                     "ruta_recorte_original": crop_orig_path,
                     "ruta_recorte": crop_act_path,
                     "label": task_key,
@@ -406,11 +435,8 @@ class AgenteClasificadorSegmentador:
 
     def mejorar_calidad_recorte(self, label_recorte):
         """ Aplica filtro de mejora de calidad sobre un recorte de cuadrante específico. """
-        if not label_recorte:
-            return False, "⚠️ Selecciona un recorte válido."
-
         if label_recorte not in self.recortes_cache:
-            return False, f"⚠️ Recorte '{label_recorte}' no encontrado en caché."
+            return False, "Recorte no encontrado en caché."
 
         rec = self.recortes_cache[label_recorte]
         exito = ImageEnhancer.aplicar_mejora_calidad(rec["ruta_recorte_original"], rec["ruta_recorte"])
@@ -421,11 +447,8 @@ class AgenteClasificadorSegmentador:
 
     def deshacer_mejora_recorte(self, label_recorte):
         """ Restaura la versión original del recorte de cuadrante sin filtros. """
-        if not label_recorte:
-            return False, "⚠️ Selecciona un recorte válido."
-
         if label_recorte not in self.recortes_cache:
-            return False, f"⚠️ Recorte '{label_recorte}' no encontrado en caché."
+            return False, "Recorte no encontrado en caché."
 
         rec = self.recortes_cache[label_recorte]
         shutil.copy(rec["ruta_recorte_original"], rec["ruta_recorte"])

@@ -38,7 +38,7 @@ def _generar_thumb_html(ruta_img, max_dim=140):
         img_thumb.save(buf_thumb, format="JPEG", quality=75)
         b64_thumb = base64.b64encode(buf_thumb.getvalue()).decode("utf-8")
 
-        file_url = f"/file={ruta_img}"
+        file_url = f"/gradio_api/file={ruta_img}"
         return f'<a href="{file_url}" target="_blank" title="🔍 Haz clic para abrir el recorte en una pestaña nueva en Alta Resolución"><img src="data:image/jpeg;base64,{b64_thumb}" width="110" style="border-radius:4px; max-height:85px; object-fit:contain; display:block; margin:auto; border:2px solid #3b82f6; transition: transform 0.2s;" /><small style="color:#2563eb; font-weight:bold; font-size:11px; display:block; margin-top:3px; text-align:center;">🔍 Abrir imagen ↗</small></a>'
     except Exception:
         return "📷"
@@ -483,8 +483,8 @@ def inspeccionar_auditoria(opcion_seleccionada, manifiesto_3):
 
 # --- CONSTRUCCIÓN DE LA INTERFAZ WEB GRADIO ---
 def build_ui():
-    with gr.Blocks(title="🎯 Sistema Multi-Agente - Tiro con Arco (v64)") as demo:
-        gr.Markdown("# 🎯 Sistema Multi-Agente - Tiro con Arco (v64 - Pre-OCR de Página y Recortes Interactivos)")
+    with gr.Blocks(title="🎯 Sistema Multi-Agente - Tiro con Arco (v67)") as demo:
+        gr.Markdown("# 🎯 Sistema Multi-Agente - Tiro con Arco (v67 - Pre-OCR de Página y Recortes Interactivos)")
         gr.Markdown("Flujo de Alta Precisión: **Paso 0** (Carga + Render HD scale=3 + Pre-OCR de Página Completa) ➡️ **Paso 1** (Segmentación con Pre-OCR) ➡️ **Paso 2** (OCR 100% Sincronizado + Miniaturas Clickables en Pestaña Nueva) ➡️ **Paso 3** (Auditoría Lógica y Deducción).")
 
         state_manifiesto_1 = gr.State(None)
@@ -648,7 +648,7 @@ def build_ui():
 
 def main():
     print("=" * 60)
-    print("🚀 Servidor Principal Multi-Agente (v64) - Tiro con Arco")
+    print("🚀 Servidor Principal Multi-Agente (v67) - Tiro con Arco")
     print("🌍 Abre tu navegador en: http://localhost:7860")
     print("=" * 60)
     demo = build_ui()
