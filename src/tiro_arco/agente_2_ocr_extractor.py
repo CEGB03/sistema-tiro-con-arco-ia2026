@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🤖 Agente 2 (v40): Extractor OCR Multimodal Optimizado con Redimensionado Suave para VLM/Nemotron + Fallback de Tesseract con CLAHE.
+🤖 Agente 2 (v56): Extractor OCR con Homogeneidad Documental, Descarte de Hoja Completa,
+Matching Robusto de Recortes Seleccionados y Refactorización Secundaria vía LLM.
 """
 
 import os
@@ -15,6 +16,25 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from PIL import Image
 import numpy as np
 import cv2
+import threading
+
+class RateLimiter:
+    """ Controlador de Tasa (35 RPM para prevenir HTTP 429 en API Key de NVIDIA NIM) """
+    def __init__(self, requests_per_minute=35):
+        self.interval = 60.0 / requests_per_minute
+        self.last_request_time = 0.0
+        self.lock = threading.Lock()
+
+    def wait_if_needed(self):
+        with self.lock:
+            now = time.time()
+            elapsed = now - self.last_request_time
+            if elapsed < self.interval:
+                sleep_time = self.interval - elapsed
+                time.sleep(sleep_time)
+            self.last_request_time = time.time()
+
+global_rate_limiter = RateLimiter(requests_per_minute=35)
 
 try:
     import pytesseract
@@ -52,7 +72,7 @@ def _obtener_nvidia_api_key():
 
 
 def extraer_cabecera_tesseract(text_raw, target_id_default="N/A"):
-    lines = [l.strip() for l in text_raw.split('\n') if l.strip()]
+    lines = [l.strip() for l in text_raw.split("\n") if l.strip()]
     arquero = "Desconocido"
     target = target_id_default
     club = "N/A"
@@ -62,12 +82,10 @@ def extraer_cabecera_tesseract(text_raw, target_id_default="N/A"):
     cleaned_text = re.sub(r'<y_[0-9\.]+>', '', cleaned_text)
     cleaned_text = re.sub(r'<class_[^>]+>', '', cleaned_text)
 
-    # 1. Target
     m_target = re.search(r'\b([0-9]{1,2}\s*[A-D])\b', cleaned_text, re.IGNORECASE)
     if m_target:
         target = re.sub(r'\s+', '', m_target.group(1)).upper()
 
-    # 2. Arquero
     m_arq = re.search(r'(?:Arquero|Archer|Athlete|Auer|Aquer|Aque|Are|Nombre)[\s\:\*\;\-\_]*([A-Za-zÁÉÍÓÚáéíóúÑñ\s]+?)(?:\s+[0-9]{1,2}[A-D]|\s*\*|\n|<|$)', cleaned_text, re.IGNORECASE)
     if m_arq and len(m_arq.group(1).strip()) > 2:
         cand = m_arq.group(1).strip()
@@ -82,7 +100,6 @@ def extraer_cabecera_tesseract(text_raw, target_id_default="N/A"):
             if len(cand) > 2 and not cand.isdigit() and cand.lower() not in ["tanteador", "planillero"]:
                 arquero = cand
 
-    # 3. Club
     m_club = re.search(r'(?:P/A/C|P/F/C|PIAIC|Club|P/A/C:)\s*:?\s*\*?\*?([^\*\n<]+)', cleaned_text, re.IGNORECASE)
     if m_club:
         cand_club = re.sub(r'[\*\#\_]', '', m_club.group(1)).strip()
@@ -90,7 +107,6 @@ def extraer_cabecera_tesseract(text_raw, target_id_default="N/A"):
         if len(cand_club) > 1:
             club = cand_club
 
-    # 4. Categoria
     m_cat = re.search(r'(?:Cat(?:egor[ií]a)?|Categor\:\s*)\s*:?\s*\*?\*?([^\*\n<]+)', cleaned_text, re.IGNORECASE)
     if m_cat:
         cat = re.sub(r'[\*\#\_]', '', m_cat.group(1)).strip()
@@ -110,7 +126,6 @@ def extraer_cabecera_tesseract(text_raw, target_id_default="N/A"):
 class ImageEnhancer:
     @staticmethod
     def redimensionar_suave(ruta_imagen, output_dir=None, max_dim=1280):
-        """ Redimensionado limpio sin binarización ni filtros agresivos para preservar la estructura visual que requiere Nemotron Parse. """
         if not os.path.exists(ruta_imagen):
             return ruta_imagen
 
@@ -134,7 +149,6 @@ class ImageEnhancer:
 
     @staticmethod
     def mejorar_imagen(ruta_imagen, output_dir=None, max_dim=1280):
-        """ Filtro con contraste CLAHE y desruido bilateral optimizado para Tesseract OCR local. """
         if not os.path.exists(ruta_imagen):
             return ruta_imagen
 
@@ -187,12 +201,39 @@ class ImageEnhancer:
         ink_count = int(np.sum(ink_only))
         ratio = ink_count / float(table_crop.shape[0] * table_crop.shape[1])
 
-        is_empty = (ratio < 0.0003) or (ink_count < 25)
-        return is_empty
+        return (ratio < 0.0003) or (ink_count < 25)
 
 
 class Agente2OCRExtractor:
-    def _parsear_salida_nemotron(self, content_text, target_id_default="N/A"):
+
+    def _generar_archivo_auditoria(self, manifiesto_agente2):
+        auditoria_list = []
+        for item in manifiesto_agente2.get("transcripciones", []):
+            trans = item.get("transcripcion", {})
+            auditoria_list.append({
+                "pagina": item.get("pagina"),
+                "target_id": item.get("target_id"),
+                "tipo_juego": item.get("tipo_juego"),
+                "arquero": trans.get("arquero", "Desconocido"),
+                "target_leido": trans.get("target", "N/A"),
+                "modelo_usado": trans.get("modelo_usado", "N/A"),
+                "tiempo_inferencia_seg": trans.get("tiempo_inferencia_seg", 0),
+                "nemotron_raw_output": trans.get("texto_raw_ocr", ""),
+                "refactored_parsed_json": trans
+            })
+
+        ruta_auditoria_json = os.path.join(self.output_dir, "auditoria_nemotron_raw_vs_refactorizado.json")
+        try:
+            with open(ruta_auditoria_json, "w", encoding="utf-8") as f_aud:
+                json.dump(auditoria_list, f_aud, indent=2, ensure_ascii=False)
+        except Exception:
+            pass
+
+        manifiesto_agente2["ruta_archivo_auditoria_json"] = ruta_auditoria_json
+        manifiesto_agente2["auditoria_nemotron"] = auditoria_list
+        return manifiesto_agente2
+
+    def _parsear_salida_nemotron(self, content_text, target_id_default="N/A", tipo_juego="clasificacion"):
         cleaned = re.sub(r'<x_[0-9\.]+>', '', content_text)
         cleaned = re.sub(r'<y_[0-9\.]+>', '', cleaned)
         cleaned = re.sub(r'<class_[^>]+>', '', cleaned)
@@ -244,20 +285,21 @@ class Agente2OCRExtractor:
             if m_cat2:
                 cat = m_cat2.group(1).strip()
 
-        # 5. Ronda / Turno y Distancia
+        # NOTA: Solo se consideran las modalidades de Sala (10m, 15m, 18m) y Aire Libre (15m, 20m, 30m, 40m, 50m, 60m, 70m) de momento.
+        # 5. Ronda / Turno y Distancia (Regla de Oro de Clasificación: Distancia -1 / -2)
         ronda = "1"
-        m_turno = re.search(r'Turno:\s*([0-9]+)', cleaned, re.IGNORECASE)
-        if m_turno:
-            ronda = m_turno.group(1)
+        m_ronda_dist = re.search(r'\b(?:10|15|18|20|30|40|50|60|70)\s*(?:m|mts)?\s*[\-\_]?\s*([12])\b', cleaned, re.IGNORECASE)
+        if m_ronda_dist:
+            ronda = m_ronda_dist.group(1)
         else:
-            m_ronda_dist = re.search(r'18m-([0-9]+)', cleaned, re.IGNORECASE)
-            if m_ronda_dist:
-                ronda = m_ronda_dist.group(1)
+            m_turno = re.search(r'Turno:\s*([0-9]+)', cleaned, re.IGNORECASE)
+            if m_turno:
+                ronda = m_turno.group(1)
 
         distancia = "18m"
-        m_dist = re.search(r'\b(18m|50m|70m)\b', cleaned, re.IGNORECASE)
+        m_dist = re.search(r'\b((?:10|15|18|20|30|40|50|60|70)\s*(?:m|mts)?)\b', cleaned, re.IGNORECASE)
         if m_dist:
-            distancia = m_dist.group(1)
+            distancia = re.sub(r'\s+', '', m_dist.group(1)).lower()
 
         # 5b. Totales en texto crudo
         totales_raw = {"total_puntos": 0, "cant_10s": 0, "cant_9s": 0}
@@ -292,13 +334,14 @@ class Agente2OCRExtractor:
                 if not line_str or '18m' in line_str or 'Turno:' in line_str or 'Total' in line_str or 'Sum' in line_str or 'Suma' in line_str:
                     continue
                 cells = [c.strip() for c in line_str.split('&')]
-                cells = [re.sub(r'\\[a-zA-Z]+\{.*?\}|\\[a-zA-Z]+|\{|\}|\*', '', c).strip() for c in cells]
+                cells = [re.sub(r'\\[a-zA-Z]+\\{.*?\}|\\[a-zA-Z]+|\{|\}|\*', '', c).strip() for c in cells]
                 if cells:
                     cells[0] = re.sub(r'^[^\d]*', '', cells[0]).strip()
                 if len(cells) >= 4 and cells[0].isdigit():
                     try:
                         s_num = int(cells[0])
-                        if 1 <= s_num <= 10:
+                        max_s = 5 if tipo_juego == 'eliminatoria' else 10
+                        if 1 <= s_num <= max_s:
                             flechas = []
                             for cell_val in cells[1:4]:
                                 val_str = cell_val.strip().upper()
@@ -321,7 +364,8 @@ class Agente2OCRExtractor:
                     if len(parts) >= 4 and parts[0].isdigit():
                         try:
                             s_num = int(parts[0])
-                            if 1 <= s_num <= 10:
+                            max_s = 5 if tipo_juego == 'eliminatoria' else 10
+                            if 1 <= s_num <= max_s:
                                 flechas = []
                                 for cell_val in parts[1:4]:
                                     val_str = cell_val.upper()
@@ -343,7 +387,7 @@ class Agente2OCRExtractor:
 
         obs = "Transcripción Exitosa" if not sin_puntos else "Sin Puntos Registrados"
         if sin_puntos and arquero_desconocido:
-            obs += " (⚠️ Arquero no reconocido - pendiente Agente 3)"
+            obs = "Sin Puntos Registrados (⚠️ Arquero no reconocido - pendiente Agente 3)"
         elif not sin_puntos and len(series_extraidas) == 0:
             obs += f" (Total Leído: {totales_raw['total_puntos']} pts - Tabla de series omitida por Nemotron)"
         elif arquero_desconocido:
@@ -380,6 +424,7 @@ class Agente2OCRExtractor:
 
         self.ollama_modelos_disponibles = self._obtener_modelos_ollama_locales()
         self.model_chain = self._construir_cadena_modelos()
+        self.rate_limiter = global_rate_limiter
 
     def _obtener_modelos_ollama_locales(self):
         try:
@@ -484,10 +529,7 @@ class Agente2OCRExtractor:
         datos["sin_puntos_registrados"] = sin_puntos
         
         if sin_puntos:
-            if "Desconocido" in datos.get("arquero", ""):
-                datos["observacion"] = "Sin Puntos Registrados (⚠️ Arquero no reconocido - pendiente Agente 3)"
-            else:
-                datos["observacion"] = "Sin Puntos Registrados"
+            datos["observacion"] = "Sin Puntos Registrados"
         else:
             if "Desconocido" in datos.get("arquero", ""):
                 datos["observacion"] = "Transcripción Exitosa (⚠️ Arquero no reconocido - pendiente Agente 3)"
@@ -502,7 +544,6 @@ class Agente2OCRExtractor:
             "cant_9s": cant_9s_calc if not sin_puntos else 0
         }
         
-        # Cotejo dinámico entre el Total Calculado de las Series y el Total Oficial de la Planilla
         if sin_puntos:
             datos["cotejo_total_coincide"] = True
         elif written_total > 0:
@@ -511,6 +552,85 @@ class Agente2OCRExtractor:
             datos["cotejo_total_coincide"] = True
             
         return datos
+
+    def _refactorizar_nemotron_con_llm(self, content_text, tipo_juego="clasificacion", target_id_default="N/A"):
+        if not self.api_key or not content_text:
+            return None
+
+        url = "https://integrate.api.nvidia.com/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+
+        prompt_refactor = f"""
+        Eres un estructurador JSON experto en Tiro con Arco (World Archery / FATARCO).
+        Toma el siguiente texto crudo (LaTeX/Markdown) devuelto por Nemotron 3.5 Parse y conviértelo al formato JSON exacto necesario para el MVP:
+
+        TEXTO CRUDO DE NEMOTRON:
+        ```markdown
+        {content_text}
+        ```
+
+        ESTRUCTURA JSON REQUERIDA:
+        {{
+          "valido": true,
+          "arquero": "Nombre y Apellido leídos o Desconocido",
+          "target": "{target_id_default}",
+          "club": "Club o Siglas o N/A",
+          "categoria": "Categoría o N/A",
+          "ronda": "1",
+          "distancia": "18m",
+          "sin_puntos_registrados": false,
+          "series": [
+            {{
+              "serie": 1,
+              "flechas": ["X", "10", "9"],
+              "suma_parcial_escrita": 29
+            }}
+          ],
+          "totales_planilla": {{
+            "total_puntos": 290,
+            "cant_10s": 15,
+            "cant_9s": 10
+          }}
+        }}
+
+        Reglas:
+        - Si tipo_juego es eliminatoria, extrae un máximo de 5 series. Si es clasificación, hasta 10 series.
+        - Conserva las letras 'X' y 'M' (Miss, 0 pts) en flechas como strings en mayúsculas.
+        - Devuelve ÚNICAMENTE el JSON entre llaves {{ ... }} sin explicaciones adicionales.
+        """
+
+        payload = {
+            "model": "meta/llama-3.1-70b-instruct",
+            "messages": [
+                {"role": "user", "content": prompt_refactor}
+            ],
+            "temperature": 0.0,
+            "max_tokens": 1500
+        }
+
+        try:
+            self.rate_limiter.wait_if_needed()
+            print(f"[Agente 2] 🧠 Ejecutando refactorización secundaria vía LLM NVIDIA NIM (llama-3.1-70b-instruct)...")
+            resp = requests.post(url, headers=headers, json=payload, timeout=25)
+            if resp.status_code == 200:
+                data = resp.json()
+                choices = data.get("choices", [])
+                if choices:
+                    content = choices[0].get("message", {}).get("content", "")
+                    match = re.search(r'\{.*\}', content, re.DOTALL)
+                    if match:
+                        parsed = json.loads(match.group(0))
+                        parsed["modelo_usado"] = "nvidia:nemotron-3.5-parse + llm-refactorer:llama-3.1-70b"
+                        parsed["texto_raw_ocr"] = content_text
+                        print(f"[Agente 2] ✅ Refactorización LLM exitosa (Arquero: {parsed.get('arquero')})")
+                        return self._calcular_totales_y_cotejar(parsed)
+        except Exception as e:
+            print(f"[Agente 2] ⚠️ Excepción en refactorización LLM: {e}")
+
+        return None
 
     def _consultar_nemotron_parse(self, ruta_imagen, tipo_juego, es_grilla_vacia=False, target_id_default="N/A", ruta_fallback_procesada=None):
         if not self.api_key:
@@ -522,53 +642,67 @@ class Agente2OCRExtractor:
             "Accept": "application/json"
         }
 
-        try:
-            t0 = time.time()
-            with open(ruta_imagen, "rb") as f_img:
-                image_bytes = f_img.read()
+        filename = os.path.basename(ruta_imagen)
+        mime_type = "image/png" if filename.lower().endswith(".png") else "image/jpeg"
 
-            filename = os.path.basename(ruta_imagen)
-            mime_type = "image/png" if filename.lower().endswith(".png") else "image/jpeg"
+        with open(ruta_imagen, "rb") as f_img:
+            image_bytes = f_img.read()
 
-            files = {
-                "document": (filename, image_bytes, mime_type),
-                "options": (None, json.dumps({"decoding": {"max_output_tokens": 4096}}), "application/json")
-            }
+        files_data = lambda: {
+            "document": (filename, image_bytes, mime_type),
+            "options": (None, json.dumps({"decoding": {"max_output_tokens": 4096}}), "application/json")
+        }
 
-            print(f"[Agente 2] 🚀 Consultando Nemotron 3.5 Parse via Retrieval API ({filename})...")
-            resp = requests.post(url, headers=headers, files=files, timeout=self.http_timeout)
-            elapsed = time.time() - t0
+        max_retries = 3
+        for intento in range(1, max_retries + 1):
+            try:
+                self.rate_limiter.wait_if_needed()
+                t0 = time.time()
+                print(f"[Agente 2] 🚀 Consultando Nemotron 3.5 Parse via Retrieval API ({filename}) [Intento {intento}/{max_retries}]...")
+                resp = requests.post(url, headers=headers, files=files_data(), timeout=self.http_timeout)
+                elapsed = time.time() - t0
 
-            if resp.status_code == 200:
-                res_json = resp.json()
-                content_text = res_json.get("content", "")
-                if content_text and isinstance(content_text, str):
-                    parsed_nemotron = self._parsear_salida_nemotron(content_text, target_id_default=target_id_default)
-                    
-                    if parsed_nemotron.get("arquero") == "Desconocido":
-                        cab_fallback = extraer_cabecera_tesseract(content_text, target_id_default=target_id_default)
-                        if cab_fallback.get("arquero") != "Desconocido":
-                            parsed_nemotron["arquero"] = cab_fallback["arquero"]
-                        if cab_fallback.get("target") != "N/A" and parsed_nemotron.get("target") == "N/A":
-                            parsed_nemotron["target"] = cab_fallback["target"]
-                        if cab_fallback.get("club") != "N/A" and parsed_nemotron.get("club") == "N/A":
-                            parsed_nemotron["club"] = cab_fallback["club"]
+                if resp.status_code == 429:
+                    wait_backoff = 4 * intento
+                    print(f"[Agente 2] ⚠️ HTTP 429 Rate Limit alcanzado en NVIDIA NIM. Pausando {wait_backoff}s antes de reintentar ({intento}/{max_retries})...")
+                    time.sleep(wait_backoff)
+                    continue
 
-                    # Si Nemotron leyó un Total de puntos > 0 pero omitió la tabla de series, intentar recuperar series con Tesseract
-                    if parsed_nemotron.get("totales_planilla", {}).get("total_puntos", 0) > 0 and len(parsed_nemotron.get("series", [])) == 0:
-                        ruta_proc = ruta_fallback_procesada or ruta_imagen
-                        res_fallback = self._fallback_tesseract_ocr(ruta_proc, tipo_juego, es_grilla_vacia=False, target_id_default=target_id_default)
-                        if res_fallback.get("series"):
-                            parsed_nemotron["series"] = res_fallback["series"]
-                            parsed_nemotron["observacion"] = f"Transcripción Híbrida (Nemotron Cabecera/Total + Tesseract Tabla: {len(res_fallback['series'])} series)"
+                if resp.status_code == 200:
+                    res_json = resp.json()
+                    content_text = res_json.get("content", "")
+                    if content_text and isinstance(content_text, str):
 
-                    parsed_nemotron["tiempo_inferencia_seg"] = round(elapsed, 2)
-                    print(f"[Agente 2] ✅ Nemotron 3.5 Parse retornó texto en {round(elapsed, 2)}s (Arquero: {parsed_nemotron.get('arquero')})")
-                    return self._calcular_totales_y_cotejar(parsed_nemotron, es_grilla_vacia=es_grilla_vacia)
-            else:
-                print(f"[Agente 2] ⚠️ HTTP {resp.status_code} desde Nemotron Parse: {resp.text[:150]}")
-        except Exception as e:
-            print(f"[Agente 2] ⚠️ Excepción consultando Nemotron 3.5 Parse: {e}")
+                        parsed_nemotron = self._parsear_salida_nemotron(content_text, target_id_default=target_id_default, tipo_juego=tipo_juego)
+                        
+                        if len(parsed_nemotron.get("series", [])) == 0 and ("\\begin{tabular}" in content_text or "|" in content_text):
+                            parsed_llm = self._refactorizar_nemotron_con_llm(content_text, tipo_juego=tipo_juego, target_id_default=target_id_default)
+                            if parsed_llm and len(parsed_llm.get("series", [])) > 0:
+                                parsed_nemotron = parsed_llm
+
+                        if parsed_nemotron.get("arquero") == "Desconocido":
+                            cab_fallback = extraer_cabecera_tesseract(content_text, target_id_default=target_id_default)
+                            if cab_fallback.get("arquero") != "Desconocido":
+                                parsed_nemotron["arquero"] = cab_fallback["arquero"]
+                            if cab_fallback.get("target") != "N/A" and parsed_nemotron.get("target") == "N/A":
+                                parsed_nemotron["target"] = cab_fallback["target"]
+                            if cab_fallback.get("club") != "N/A" and parsed_nemotron.get("club") == "N/A":
+                                parsed_nemotron["club"] = cab_fallback["club"]
+
+                        if parsed_nemotron.get("totales_planilla", {}).get("total_puntos", 0) > 0 and len(parsed_nemotron.get("series", [])) == 0:
+                            ruta_proc = ruta_fallback_procesada or ruta_imagen
+                            res_fallback = self._fallback_tesseract_ocr(ruta_proc, tipo_juego, es_grilla_vacia=False, target_id_default=target_id_default)
+                            if res_fallback.get("series"):
+                                parsed_nemotron["series"] = res_fallback["series"]
+                                parsed_nemotron["observacion"] = f"Transcripción Híbrida (Nemotron Cabecera/Total + Tesseract Tabla: {len(res_fallback['series'])} series)"
+
+                        parsed_nemotron["tiempo_inferencia_seg"] = round(elapsed, 2)
+                        print(f"[Agente 2] ✅ Nemotron 3.5 Parse retornó texto en {round(elapsed, 2)}s (Arquero: {parsed_nemotron.get('arquero')})")
+                        return self._calcular_totales_y_cotejar(parsed_nemotron, es_grilla_vacia=es_grilla_vacia)
+                else:
+                    print(f"[Agente 2] ⚠️ HTTP {resp.status_code} desde Nemotron Parse: {resp.text[:150]}")
+            except Exception as e:
+                print(f"[Agente 2] ⚠️ Excepción consultando Nemotron 3.5 Parse: {e}")
 
         return None
 
@@ -713,7 +847,7 @@ class Agente2OCRExtractor:
         cabecera = extraer_cabecera_tesseract(text_raw, target_id_default=target_id_default)
 
         series_extraidas = []
-        lines = text_raw.split('\n')
+        lines = text_raw.split("\n")
         s_num = 1
         for line in lines:
             line_str = line.strip()
@@ -763,15 +897,35 @@ class Agente2OCRExtractor:
         ruta_recorte = tarea.get("ruta_recorte", "")
         target_id_default = str(tarea.get("target_id", "N/A"))
 
-        if layout == "portada" or tipo_juego == "sin_modo":
-            return None
+        # Si Agente 1 marcó la hoja completa como información o portada, se omite OCR
+        if layout in ["portada", "eliminatoria"] or tipo_juego in ["sin_modo", "info", "informacion", "eliminatoria"] or tarea.get("es_pagina_informacion", False):
+            print(f"[Agente 2] ⏭️ Omitiendo OCR para {tarea.get('label', target_id_default)} (Hoja de Información / Portada)")
+            return {
+                "pagina": tarea.get("pagina"),
+                "target_id": tarea.get("target_id"),
+                "tipo_juego": "informacion",
+                "layout": layout,
+                "ruta_recorte_original": ruta_recorte,
+                "ruta_recorte_procesada": ruta_recorte,
+                "transcripcion": {
+                    "valido": True,
+                    "arquero": "N/A (Hoja Informativa)",
+                    "target": target_id_default,
+                    "club": "N/A",
+                    "categoria": "N/A",
+                    "sin_puntos_registrados": True,
+                    "observacion": "Hoja de Información / Portada (Descartada)",
+                    "series": [],
+                    "totales_planilla": {"total_puntos": 0, "cant_10s": 0, "cant_9s": 0},
+                    "texto_raw_ocr": "(Omitido por Hoja de Información / Portada)",
+                    "modelo_usado": "Descartado (Sin OCR)",
+                    "tipo_juego": "informacion"
+                }
+            }
 
-        # Para Nemotron/VLM: Redimensionado suave del recorte original (sin filtros agresivos OpenCV)
         ruta_original_resized = ImageEnhancer.redimensionar_suave(ruta_recorte, output_dir=self.output_dir, max_dim=1280)
-
-        # Para Tesseract OCR: Imagen procesada con contraste CLAHE y desruido
         ruta_procesada = ImageEnhancer.mejorar_imagen(ruta_recorte, output_dir=self.output_dir, max_dim=1280)
-        es_grilla_vacia = ImageEnhancer.detectar_tabla_vacia(ruta_procesada)
+        es_grilla_vacia = tarea.get("es_cuadrante_vacio", False) or ImageEnhancer.detectar_tabla_vacia(ruta_procesada)
 
         resultado_ocr = self._consultar_vlm(
             ruta_imagen=ruta_original_resized, 
@@ -783,6 +937,9 @@ class Agente2OCRExtractor:
 
         if not resultado_ocr or not resultado_ocr.get("valido", True):
             resultado_ocr = self._fallback_tesseract_ocr(ruta_procesada, tipo_juego, es_grilla_vacia=es_grilla_vacia, target_id_default=target_id_default)
+
+        # Mantiene tipo_juego inmutable recibido desde Agente 1 (clasificacion o eliminatoria)
+        resultado_ocr["tipo_juego"] = tipo_juego
 
         return {
             "pagina": tarea.get("pagina"),
@@ -803,11 +960,19 @@ class Agente2OCRExtractor:
             "transcripciones": []
         }
 
-        print(f"[Agente 2] 👁️ Procesando OCR en paralelo para {len(tareas)} recorte(s) de diana...")
+        tareas_a_procesar = [t for t in tareas if not t.get("es_pagina_informacion") and t.get("tipo_juego") not in ["info", "informacion", "portada", "eliminatoria"]]
+        tareas_omitidas = [t for t in tareas if t not in tareas_a_procesar]
 
-        with ThreadPoolExecutor(max_workers=min(self.max_workers, max(1, len(tareas)))) as executor:
+        for t in tareas_omitidas:
+            res_om = self._procesar_tarea_individual(t)
+            if res_om:
+                manifiesto_agente2["transcripciones"].append(res_om)
+
+        print(f"[Agente 2] 👁️ Procesando OCR para {len(tareas_a_procesar)} recorte(s) de planillas ({len(tareas_omitidas)} hojas de información/portadas omitidas)...")
+
+        with ThreadPoolExecutor(max_workers=min(self.max_workers, max(1, len(tareas_a_procesar) if tareas_a_procesar else 1))) as executor:
             future_to_tarea = {
-                executor.submit(self._procesar_tarea_individual, t): t for t in tareas
+                executor.submit(self._procesar_tarea_individual, t): t for t in tareas_a_procesar
             }
             for future in as_completed(future_to_tarea):
                 res = future.result()
@@ -815,7 +980,7 @@ class Agente2OCRExtractor:
                     manifiesto_agente2["transcripciones"].append(res)
 
         manifiesto_agente2["transcripciones"].sort(key=lambda x: (x.get("pagina", 1), str(x.get("target_id", ""))))
-        return manifiesto_agente2
+        return self._generar_archivo_auditoria(manifiesto_agente2)
 
     def reintentar_tareas_especificas(self, manifiesto_agente1, manifiesto_agente2_previo, identificadores_a_reintentar):
         if not identificadores_a_reintentar:
@@ -827,29 +992,33 @@ class Agente2OCRExtractor:
         for t in tareas_todas:
             pag = str(t.get('pagina'))
             target_pos = str(t.get('target_id'))
-            
-            keys_posibles = [
-                f"Pág {pag} - Pos {target_pos}",
-                f"Pág {pag} - Posición {target_pos}",
-                f"Pág {pag} - {target_pos}"
-            ]
-            
+            lbl = str(t.get('label', ''))
+
             match = False
             for sel in identificadores_a_reintentar:
-                for k in keys_posibles:
-                    if k in sel or sel.startswith(k):
+                sel_str = str(sel)
+                # Coincidencia exacta o parcial de etiqueta de recorte
+                if lbl and (lbl == sel_str or lbl in sel_str or sel_str in lbl):
+                    match = True
+                    break
+                # Coincidencia flexible por número de página y diana/posición
+                if f"Pág {pag}" in sel_str or f"Página {pag}" in sel_str:
+                    if target_pos in sel_str or f"Pos {target_pos}" in sel_str or f"Posición {target_pos}" in sel_str or target_pos == "Portada":
                         match = True
                         break
-                if match:
-                    break
 
             if match:
-                tareas_filtradas.append(t)
+                t_copy = dict(t)
+                t_copy["es_pagina_informacion"] = False
+                if t_copy.get("tipo_juego") == "informacion":
+                    t_copy["tipo_juego"] = "clasificacion"
+                tareas_filtradas.append(t_copy)
 
         if not tareas_filtradas:
+            print(f"[Agente 2] ⚠️ No se encontraron tareas coincidentes para los identificadores: {identificadores_a_reintentar}")
             return manifiesto_agente2_previo
 
-        print(f"[Agente 2] 🔄 Reintentando OCR exclusivamente para {len(tareas_filtradas)} diana(s) seleccionada(s)...")
+        print(f"[Agente 2] 🔄 Ejecutando OCR exclusivamente para {len(tareas_filtradas)} diana(s) seleccionada(s): {[t.get('label') for t in tareas_filtradas]}")
 
         nuevos_resultados = {}
         with ThreadPoolExecutor(max_workers=min(self.max_workers, max(1, len(tareas_filtradas)))) as executor:
@@ -877,4 +1046,4 @@ class Agente2OCRExtractor:
         if not isinstance(manifiesto_agente2_previo, dict):
             manifiesto_agente2_previo = {}
         manifiesto_agente2_previo["transcripciones"] = transcripciones_actualizadas
-        return manifiesto_agente2_previo
+        return self._generar_archivo_auditoria(manifiesto_agente2_previo)
