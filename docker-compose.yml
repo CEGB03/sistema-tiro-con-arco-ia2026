@@ -1,0 +1,27 @@
+services:
+  archery-app:
+    build: .
+    container_name: archery_multiagent_app
+    ports:
+      - "7860:7860"
+    env_file:
+      - .env
+    environment:
+      - OLLAMA_URL=http://archery-ollama:11434/v1/chat/completions
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - archery-ollama
+    restart: unless-stopped
+
+  archery-ollama:
+    image: ollama/ollama:latest
+    container_name: archery_ollama_ocr
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_storage:/root/.ollama
+    restart: unless-stopped
+
+volumes:
+  ollama_storage:
