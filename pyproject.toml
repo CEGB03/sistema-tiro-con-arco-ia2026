@@ -1,11 +1,7 @@
-[build-system]
-requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "sistema-tiro-con-arco-ia"
 version = "0.1.0"
-description = "Sistema multi-agente de transcripción de planillas de tiro con arco"
+description = "Sistema multi-agente de transcripción y validación de planillas de tiro con arco"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -19,6 +15,7 @@ dependencies = [
     "opencv-python>=4.8",
     "requests>=2.31",
     "pypdfium2>=4.0",
+    "pytesseract>=0.3.10",
 ]
 
 [project.optional-dependencies]

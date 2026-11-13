@@ -6,15 +6,18 @@ ENV PYTHONPATH=/app/src
 
 WORKDIR /app
 
-# Instalar dependencias del sistema (OpenCV, GLib, Tesseract OCR en español)
-RUN apt-get update && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 tesseract-ocr tesseract-ocr-spa && rm -rf /var/lib/apt/lists/*
+# Instalar dependencias del sistema operativo (OpenCV, Tesseract OCR y idioma español)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1 \
+    libglib2.0-0 \
+    tesseract-ocr \
+    tesseract-ocr-spa \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copiar configuración de proyecto e instalar dependencias Python
-COPY pyproject.toml ./
-
-# Copiar el código fuente y variables de entorno
+# Copiar archivos del proyecto e instalar dependencias Python
+COPY pyproject.toml README.md ./
 COPY src/ ./src/
-COPY .env* ./
+
 RUN pip install --no-cache-dir .
 
 EXPOSE 7860
