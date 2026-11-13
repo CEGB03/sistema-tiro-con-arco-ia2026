@@ -898,28 +898,29 @@ class Agente2OCRExtractor:
         target_id_default = str(tarea.get("target_id", "N/A"))
 
         # Si Agente 1 marcó la hoja completa como información o portada, se omite OCR
-        if layout in ["portada", "eliminatoria"] or tipo_juego in ["sin_modo", "info", "informacion", "eliminatoria"] or tarea.get("es_pagina_informacion", False):
+        if layout in ["portada"] or tipo_juego in ["sin_modo", "info", "informacion", "eliminatoria"] or tarea.get("es_pagina_informacion", False):
             print(f"[Agente 2] ⏭️ Omitiendo OCR para {tarea.get('label', target_id_default)} (Hoja de Información / Portada)")
+            is_elim = (tipo_juego == "eliminatoria")
             return {
                 "pagina": tarea.get("pagina"),
                 "target_id": tarea.get("target_id"),
-                "tipo_juego": "informacion",
+                "tipo_juego": "eliminatoria" if is_elim else "informacion",
                 "layout": layout,
                 "ruta_recorte_original": ruta_recorte,
                 "ruta_recorte_procesada": ruta_recorte,
                 "transcripcion": {
                     "valido": True,
-                    "arquero": "N/A (Hoja Informativa)",
+                    "arquero": "N/A (Eliminatoria - Fuera de Alcance)" if is_elim else "N/A (Hoja Informativa)",
                     "target": target_id_default,
                     "club": "N/A",
                     "categoria": "N/A",
                     "sin_puntos_registrados": True,
-                    "observacion": "Hoja de Información / Portada (Descartada)",
+                    "observacion": "Planilla de Eliminatoria (Fuera de Alcance para Ranking)" if is_elim else "Hoja de Información / Portada (Descartada)",
                     "series": [],
                     "totales_planilla": {"total_puntos": 0, "cant_10s": 0, "cant_9s": 0},
-                    "texto_raw_ocr": "(Omitido por Hoja de Información / Portada)",
+                    "texto_raw_ocr": "(Omitido por Planilla de Eliminatoria)" if is_elim else "(Omitido por Hoja de Información / Portada)",
                     "modelo_usado": "Descartado (Sin OCR)",
-                    "tipo_juego": "informacion"
+                    "tipo_juego": "eliminatoria" if is_elim else "informacion"
                 }
             }
 

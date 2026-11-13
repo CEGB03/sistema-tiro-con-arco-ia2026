@@ -72,7 +72,7 @@ Una vez iniciado el contenedor, abrí tu navegador e ingresá a:
 Para poder ver los logs del docker, ejecutá en tu terminal:
 
 ```bash
-docker compose logs -f archery-app
+docker compose logs -f archery_multiagent_app
 ```
 
 ### 6. Frenado del contenedor

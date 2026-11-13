@@ -573,8 +573,8 @@ def inspeccionar_auditoria(opcion_seleccionada, manifiesto_3):
 
 # --- CONSTRUCCIÓN DE LA INTERFAZ WEB GRADIO ---
 def build_ui():
-    with gr.Blocks(title="🎯 Sistema Multi-Agente - Tiro con Arco (v68)") as demo:
-        gr.Markdown("# 🎯 Sistema Multi-Agente - Tiro con Arco (v68 - Mejoras Masivas de Calidad y Control Checkbox)")
+    with gr.Blocks(title="🎯 Sistema Multi-Agente - Tiro con Arco (v69)") as demo:
+        gr.Markdown("# 🎯 Sistema Multi-Agente - Tiro con Arco (v69 - Mejoras Masivas de Calidad y Control Checkbox)")
         gr.Markdown("Flujo de Alta Usabilidad: **Paso 0** (Carga + Mejora Masiva de Páginas) ➡️ **Paso 1** (Segmentación + Mejora Masiva de Recortes) ➡️ **Paso 2** (Selección Masiva Checkbox + OCR 100% Sincronizado) ➡️ **Paso 3** (Auditoría Lógica y Deducción).")
 
         state_manifiesto_1 = gr.State(None)
@@ -791,7 +791,7 @@ def build_ui():
 
 def main():
     print("=" * 60)
-    print("🚀 Servidor Principal Multi-Agente (v68) - Tiro con Arco")
+    print("🚀 Servidor Principal Multi-Agente (v69) - Tiro con Arco")
     print("🌍 Abre tu navegador en: http://localhost:7860")
     print("=" * 60)
     demo = build_ui()
