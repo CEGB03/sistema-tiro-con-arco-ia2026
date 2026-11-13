@@ -1,2 +1,0 @@
-[console_scripts]
-tiro-con-arco = tiro_arco.app_tiro_con_arco:main
