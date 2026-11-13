@@ -24,7 +24,7 @@ sistema-tiro-con-arco-ia2026/
 │    │    ├── Eliminacion-AFAPIECOSF-Sala-2-Arqueros.png
 │    │    └── 2026-05-03-S-AFPSF-Planillas-20260505_recortado.pdf
 │    └── processed/ ← Resultados exportados y datasets
-│        └── torneo_indoor_san_francisco_detallado.csv
+│        └── torneo_indoor_afapieco_cordoba_recortado.csv (Generado a mano con planilla recotada)
 ├── models/ ← (Reservado para pesos/modelos locales si aplicara)
 ├── tests/ ← Pruebas unitarias/integración
 │    └── test_agente_1.py

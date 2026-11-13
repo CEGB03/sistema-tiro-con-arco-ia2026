@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🤖 Agente 2 (v56): Extractor OCR con Homogeneidad Documental, Descarte de Hoja Completa,
+🤖 Agente 2 (v61): Extractor OCR con Homogeneidad Documental, Descarte de Hoja Completa,
 Matching Robusto de Recortes Seleccionados y Refactorización Secundaria vía LLM.
 """
 
@@ -71,56 +71,91 @@ def _obtener_nvidia_api_key():
     return ""
 
 
-def extraer_cabecera_tesseract(text_raw, target_id_default="N/A"):
-    lines = [l.strip() for l in text_raw.split("\n") if l.strip()]
-    arquero = "Desconocido"
+
+def extraer_datos_cabecera_robusta(text_raw, target_id_default="N/A"):
+    cleaned = re.sub(r'<x_[0-9\.]+>', '', text_raw)
+    cleaned = re.sub(r'<y_[0-9\.]+>', '', cleaned)
+    cleaned = re.sub(r'<class_[^>]+>', '', cleaned)
+    cleaned = re.sub(r'[\*\#\_]', '', cleaned).strip()
+
+    cat_codes = [
+        r'\b(?:R|C|B|T|I|E|L)\s*(?:M|W|F|50M|60M|70M|U[0-9]+[A-Z0-9]*|E[0-9]+)\b',
+        r'\b(?:RM|RW|CM|CW|BM|BW|TM|TW|IM|IW)\b'
+    ]
+
+    # 1. Target
     target = target_id_default
-    club = "N/A"
+    m_tgt = re.search(r'\b([0-9]{1,2}\s*[A-D])\b', cleaned, re.IGNORECASE)
+    if m_tgt:
+        target = re.sub(r'\s+', '', m_tgt.group(1)).upper()
+
+    # 2. Categoría
     cat = "N/A"
+    m_cat_lbl = re.search(r'(?:Cat(?:egor[ií]a)?|Categor\:\s*)\s*:?\s*([^\n<]+)', cleaned, re.IGNORECASE)
+    if m_cat_lbl:
+        cand_cat = m_cat_lbl.group(1).strip()
+        cand_cat = re.sub(r'\b[0-9]{1,2}\s*[A-D]\b.*$', '', cand_cat, flags=re.IGNORECASE).strip()
+        if len(cand_cat) > 1:
+            cat = cand_cat
 
-    cleaned_text = re.sub(r'<x_[0-9\.]+>', '', text_raw)
-    cleaned_text = re.sub(r'<y_[0-9\.]+>', '', cleaned_text)
-    cleaned_text = re.sub(r'<class_[^>]+>', '', cleaned_text)
+    if cat == "N/A" or len(cat) > 25:
+        for pat in cat_codes:
+            m_c = re.search(pat, cleaned, re.IGNORECASE)
+            if m_c:
+                cat = m_c.group(0).strip().upper()
+                break
 
-    m_target = re.search(r'\b([0-9]{1,2}\s*[A-D])\b', cleaned_text, re.IGNORECASE)
-    if m_target:
-        target = re.sub(r'\s+', '', m_target.group(1)).upper()
+    # Limpiar categoría del texto para extraer el club sin contaminación
+    cleaned_no_cat = cleaned
+    if cat != "N/A":
+        cleaned_no_cat = re.sub(re.escape(cat), '', cleaned_no_cat, flags=re.IGNORECASE)
+    for pat in cat_codes:
+        cleaned_no_cat = re.sub(pat, '', cleaned_no_cat, flags=re.IGNORECASE)
 
-    m_arq = re.search(r'(?:Arquero|Archer|Athlete|Auer|Aquer|Aque|Are|Nombre)[\s\:\*\;\-\_]*([A-Za-zÁÉÍÓÚáéíóúÑñ\s]+?)(?:\s+[0-9]{1,2}[A-D]|\s*\*|\n|<|$)', cleaned_text, re.IGNORECASE)
-    if m_arq and len(m_arq.group(1).strip()) > 2:
-        cand = m_arq.group(1).strip()
-        cand = re.sub(r'[\*\#\_]', '', cand).strip()
-        if cand.lower() not in ["detectado", "desconocido", "null", "none", "tanteador", "planillero"]:
-            arquero = cand
-    else:
-        m_arq2 = re.search(r'Arquero[\s\:\*\;\-\_]+([^\n\<]+)', cleaned_text, re.IGNORECASE)
-        if m_arq2:
-            cand = re.sub(r'[\*\#\_]', '', m_arq2.group(1)).strip()
-            cand = re.sub(r'\b[0-9]{1,2}[A-D]\b', '', cand).strip()
-            if len(cand) > 2 and not cand.isdigit() and cand.lower() not in ["tanteador", "planillero"]:
-                arquero = cand
-
-    m_club = re.search(r'(?:P/A/C|P/F/C|PIAIC|Club|P/A/C:)\s*:?\s*\*?\*?([^\*\n<]+)', cleaned_text, re.IGNORECASE)
+    # 3. Club
+    club = "N/A"
+    m_club = re.search(r'\b(?:P/A/C|P/F/C|PIAIC|Club)\b\s*:?\s*([^\n<]+)', cleaned_no_cat, re.IGNORECASE)
     if m_club:
-        cand_club = re.sub(r'[\*\#\_]', '', m_club.group(1)).strip()
-        cand_club = re.sub(r'\b(RM|CM|BM)\b', '', cand_club, flags=re.IGNORECASE).strip()
+        cand_club = m_club.group(1).strip()
+        cand_club = re.sub(r'\b[0-9]{1,2}\s*[A-D]\b.*$', '', cand_club, flags=re.IGNORECASE).strip()
         if len(cand_club) > 1:
             club = cand_club
 
-    m_cat = re.search(r'(?:Cat(?:egor[ií]a)?|Categor\:\s*)\s*:?\s*\*?\*?([^\*\n<]+)', cleaned_text, re.IGNORECASE)
-    if m_cat:
-        cat = re.sub(r'[\*\#\_]', '', m_cat.group(1)).strip()
-    else:
-        m_cat2 = re.search(r'\b(R\s*M|C\s*M|B\s*M|R\s*U[0-9]+[A-Z0-9]*|C\s*U[0-9]+[A-Z0-9]*)\b', cleaned_text)
-        if m_cat2:
-            cat = m_cat2.group(1).strip()
+    # 4. Arquero
+    arquero = "Desconocido"
+    
+    # 4a. Intento por etiqueta estricta ('Arquero:', 'Archer:', 'Athlete:', 'Nombre:')
+    m_arq = re.search(r'\b(?:Arquero|Archer|Athlete|Nombre)\b[\s\:\-\_]*([^\n\<]+)', cleaned, re.IGNORECASE)
+    if m_arq:
+        cand = m_arq.group(1).strip()
+        cand = re.sub(r'\b[0-9]{1,2}\s*[A-D]\b.*$', '', cand, flags=re.IGNORECASE).strip()
+        cand = re.sub(r'(?:P/A/C|P/F/C|PIAIC|Club).*$', '', cand, flags=re.IGNORECASE).strip()
+        words = cand.lower().split()
+        if cand and not any(w in ['tanteador', 'planillero', 'juez', 'firma', 'signature', 'detectado', 'desconocido', 'null', 'none'] for w in words):
+            if len(cand) > 2 and not cand.isdigit():
+                arquero = cand
 
-    return {
-        "arquero": arquero,
-        "target": target,
-        "club": club,
-        "categoria": cat
-    }
+    # 4b. Intento por posición si no hubo etiqueta o dio Desconocido
+    if arquero == "Desconocido":
+        m_before = re.search(r'([A-Za-zÁÉÍÓÚáéíóúÑñ0-9\s\.\,\-]{3,60}?)\s+\b(?:P/A/C|P/F/C|PIAIC|Club)\b\s*:', cleaned, re.IGNORECASE)
+        if m_before:
+            cand_b = m_before.group(1).strip()
+            cand_b = re.sub(r'\b[0-9]{1,2}\s*[A-D]\b', '', cand_b, flags=re.IGNORECASE).strip()
+            if '\n' in cand_b:
+                lines = [l.strip() for l in cand_b.split('\n') if l.strip()]
+                valid_lines = [l for l in lines if not any(w in l.lower() for w in ['torneo', 'copa', 'asociacion', 'asociación', 'federacion', 'federación', 'archery', 'world', 'ronda', 'turno'])]
+                if valid_lines:
+                    cand_b = valid_lines[-1]
+            words_b = cand_b.lower().split()
+            if cand_b and not any(w in ['torneo', 'copa', 'asociacion', 'asociación', 'federacion', 'federación', 'archery', 'world', 'tanteador', 'planillero', 'juez', 'detectado', 'desconocido'] for w in words_b):
+                if len(cand_b) > 2 and not cand_b.isdigit():
+                    arquero = cand_b
+
+    return {"arquero": arquero, "target": target, "club": club, "categoria": cat}
+
+
+def extraer_cabecera_tesseract(text_raw, target_id_default="N/A"):
+    return extraer_datos_cabecera_robusta(text_raw, target_id_default=target_id_default)
 
 
 class ImageEnhancer:
@@ -238,52 +273,12 @@ class Agente2OCRExtractor:
         cleaned = re.sub(r'<y_[0-9\.]+>', '', cleaned)
         cleaned = re.sub(r'<class_[^>]+>', '', cleaned)
 
-        # 1. Arquero
-        arquero = "Desconocido"
-        candidates = re.findall(r'(?:Arquero|Archer|Athlete|Nombre)[\s\:\*\;\-\_]+([^\n\<]+)', cleaned, re.IGNORECASE)
-        
-        valid_names = []
-        for cand in candidates:
-            c_clean = re.sub(r'[\*\#\_]', '', cand).strip()
-            c_clean = re.sub(r'\b[0-9]{1,2}\s*[A-D]\b.*$', '', c_clean, flags=re.IGNORECASE).strip()
-            c_clean = re.sub(r'[\*\#\_]', '', c_clean).strip()
-            
-            words = c_clean.lower().split()
-            if any(w in ['tanteador', 'planillero', 'juez', 'firma', 'signature', 'derei', 'pelfs', 'detectado', 'desconocido', 'null', 'none'] for w in words):
-                continue
-            if len(c_clean) > 2 and not c_clean.isdigit():
-                valid_names.append(c_clean)
-
-        if valid_names:
-            arquero = valid_names[0]
-
+        info_cab = extraer_datos_cabecera_robusta(content_text, target_id_default=target_id_default)
+        arquero = info_cab["arquero"]
+        target = info_cab["target"]
+        club = info_cab["club"]
+        cat = info_cab["categoria"]
         arquero_desconocido = (arquero == "Desconocido" or arquero.lower() in ["tanteador", "planillero", "desconocido"])
-
-        # 2. Target / Diana
-        target = target_id_default
-        m_target = re.search(r'\b([0-9]{1,2}\s*[A-D])\b', cleaned, re.IGNORECASE)
-        if m_target:
-            target = re.sub(r'\s+', '', m_target.group(1)).upper()
-
-        # 3. Club
-        club = "N/A"
-        m_club = re.search(r'(?:P/A/C|P/F/C|PIAIC|Club|P/A/C:)\s*:?\s*\*?\*?([^\*\n<]+)', cleaned, re.IGNORECASE)
-        if m_club:
-            cand_club = re.sub(r'[\*\#\_]', '', m_club.group(1)).strip()
-            cand_club = re.sub(r'\b(RM|CM|BM|RW|CW|BW)\b', '', cand_club, flags=re.IGNORECASE).strip()
-            if len(cand_club) > 1:
-                club = cand_club
-
-        # 4. Categoría
-        cat = "N/A"
-        m_cat = re.search(r'(?:Cat(?:egor[ií]a)?|Categor\:\s*)\s*:?\s*\*?\*?([^\*\n<]+)', cleaned, re.IGNORECASE)
-        if m_cat:
-            cat = re.sub(r'[\*\#\_]', '', m_cat.group(1)).strip()
-
-        if cat == "N/A":
-            m_cat2 = re.search(r'\b(R\s*U[0-9]+[A-Z0-9]*|C\s*U[0-9]+[A-Z0-9]*|B\s*U[0-9]+[A-Z0-9]*|T\s*U[0-9]+[A-Z0-9]*|T\s*E[0-9]+|R\s*E[0-9]+|B\s*E[0-9]+|C\s*E[0-9]+|R\s*M|C\s*M|B\s*M|R\s*W|C\s*W|B\s*W|B\s*50M|R\s*50M|C\s*50M)\b', cleaned, re.IGNORECASE)
-            if m_cat2:
-                cat = m_cat2.group(1).strip()
 
         # NOTA: Solo se consideran las modalidades de Sala (10m, 15m, 18m) y Aire Libre (15m, 20m, 30m, 40m, 50m, 60m, 70m) de momento.
         # 5. Ronda / Turno y Distancia (Regla de Oro de Clasificación: Distancia -1 / -2)
