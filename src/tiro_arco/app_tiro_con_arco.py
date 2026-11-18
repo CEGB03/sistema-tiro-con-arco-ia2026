@@ -1,4 +1,5 @@
 import os
+import glob
 import sys
 import json
 import base64
@@ -51,8 +52,16 @@ def _generar_thumb_html(ruta_img, max_dim=140):
 
         data_url_full = f"data:image/jpeg;base64,{b64_full}"
         data_url_thumb = f"data:image/jpeg;base64,{b64_thumb}"
+        file_url = f"/file={os.path.abspath(ruta_img)}"
 
-        return f'<a href="{data_url_full}" target="_blank" title="🔍 Haz clic para abrir el recorte en una pestaña nueva" style="text-decoration:none; display:inline-block; text-align:center;"><img src="{data_url_thumb}" width="110" style="border-radius:6px; max-height:85px; object-fit:contain; display:block; margin:auto; border:2px solid #3b82f6; transition: transform 0.2s;" onmouseover="this.style.transform=\'scale(1.05)\'" onmouseout="this.style.transform=\'scale(1)\'" /><small style="color:#2563eb; font-weight:bold; font-size:11px; display:block; margin-top:3px;">🔍 Abrir imagen ↗</small></a>'
+        return (
+            f'<a href="{file_url}" target="_blank" '
+            f'onclick="try {{ var w=window.open(\'about:blank\'); w.document.write(\'<html style=&quot;background:#0f172a;&quot;><head><title>Recorte HD</title></head><body style=&quot;margin:0; background:#0f172a; display:flex; align-items:center; justify-content:center; min-height:100vh;&quot;><img src=&quot;{data_url_full}&quot; style=&quot;max-width:100%; max-height:100vh; object-fit:contain;&quot;/></body></html>\'); return false; }} catch(e) {{ return true; }}" '
+            f'title="🔍 Haz clic para abrir el recorte en una pestaña nueva" style="text-decoration:none; display:inline-block; text-align:center;">'
+            f'<img src="{data_url_thumb}" width="110" style="border-radius:6px; max-height:85px; object-fit:contain; display:block; margin:auto; border:2px solid #3b82f6; transition: transform 0.2s;" onmouseover="this.style.transform=\'scale(1.05)\'" onmouseout="this.style.transform=\'scale(1)\'" />'
+            f'<small style="color:#2563eb; font-weight:bold; font-size:11px; display:block; margin-top:3px;">🔍 Abrir imagen ↗</small>'
+            f'</a>'
+        )
     except Exception:
         return "📷"
 
@@ -563,7 +572,7 @@ def calcular_metricas_evaluacion(manifiesto_3, csv_path=None):
         return """
         <div style="background-color: #0f172a; color: #94a3b8; padding: 20px; border-radius: 10px; border: 1px solid #334155;">
             <h4 style="color: #38bdf8; margin-top: 0;">📊 Evaluación del MVP contra Verdad Terreno</h4>
-            <p>Haz clic en el botón <b>📊 Calcular Métricas de Eficacia y Error (vs. Verdad Terreno)</b> tras ejecutar el <b>Paso 3</b> para ver la precisión del modelo contra el dataset oficial.</p>
+            <p>Haz clic en el botón <b>📊 Calcular Métricas de Eficacia y Error (vs. Verdad Terreno)</b> tras ejecutar el <b>Paso 3</b> para ver la precisión del modelo y la tabla detallada de errores.</p>
         </div>
         """
 
@@ -597,9 +606,9 @@ def calcular_metricas_evaluacion(manifiesto_3, csv_path=None):
                     break
 
     try:
-        df_gt = pd.read_csv(csv_path)
+        df_gt = pd.read_csv(csv_path) if csv_path else None
     except Exception as e:
-        return f"<div style='padding:15px; background-color:#f8d7da; color:#721c24; border-radius:8px;'>❌ Error al cargar Verdad Terreno ({csv_path}): {e}</div>"
+        df_gt = None
 
     total_planillas_evaluadas = 0
     planillas_exactas = 0
@@ -607,6 +616,8 @@ def calcular_metricas_evaluacion(manifiesto_3, csv_path=None):
     flechas_correctas = 0
     coincidencias_total_puntos = 0
     coincidencias_nombre = 0
+
+    detalles_errores_planillas = []
 
     for item in auditados:
         tipo_j = item.get("tipo_juego", "clasificacion")
@@ -616,65 +627,179 @@ def calcular_metricas_evaluacion(manifiesto_3, csv_path=None):
         target = str(item.get("target") or item.get("target_id") or "").strip().upper()
         ronda = int(item.get("ronda", 1) or 1)
         arquero_trans = str(item.get("arquero", "")).strip()
+        p_img = item.get("ruta_recorte", "")
+        pagina = item.get("pagina", 1)
+        target_id = str(item.get("target_id", "N/A"))
+        score_certeza = item.get("score_certeza", 100.0)
+        estado_aud = item.get("estado_auditoria", "OK")
 
-        # Buscar coincidencia en Verdad Terreno por Target y Ronda
-        match_gt = df_gt[(df_gt['Target'].astype(str).str.strip().str.upper() == target) & (df_gt['Round'] == ronda)]
-        if match_gt.empty:
-            match_gt = df_gt[df_gt['Target'].astype(str).str.strip().str.upper() == target]
+        match_gt = pd.DataFrame()
+        if df_gt is not None and not df_gt.empty:
+            match_gt = df_gt[(df_gt['Target'].astype(str).str.strip().str.upper() == target) & (df_gt['Round'] == ronda)]
+            if match_gt.empty:
+                match_gt = df_gt[df_gt['Target'].astype(str).str.strip().str.upper() == target]
 
-        if match_gt.empty:
-            continue
+        has_gt = not match_gt.empty
+        row_gt = match_gt.iloc[0] if has_gt else None
 
-        row_gt = match_gt.iloc[0]
-        total_planillas_evaluadas += 1
+        if has_gt:
+            total_planillas_evaluadas += 1
+            gt_archer = str(row_gt['Archer']).strip()
+            gt_total = int(row_gt['Total_Score'])
+        else:
+            gt_archer = "N/A (Sin GT)"
+            gt_total = 0
 
-        gt_archer = str(row_gt['Archer']).strip()
-        if gt_archer.lower() in arquero_trans.lower() or arquero_trans.lower() in gt_archer.lower():
-            coincidencias_nombre += 1
-
-        gt_total = int(row_gt['Total_Score'])
+        tot_ofic = item.get("totales_oficiales_planilla", {}).get("total_puntos", 0)
         calc_total = item.get("totales_calculados_series", {}).get("total_puntos", 0)
-        if calc_total == gt_total:
-            coincidencias_total_puntos += 1
+
+        nombre_coincide = False
+        if has_gt:
+            if gt_archer.lower() in arquero_trans.lower() or arquero_trans.lower() in gt_archer.lower():
+                coincidencias_nombre += 1
+                nombre_coincide = True
+
+            if calc_total == gt_total:
+                coincidencias_total_puntos += 1
 
         series = item.get("series", [])
         p_flechas_tot = 0
         p_flechas_corr = 0
+
+        errores_especificos = []
+
+        if has_gt and not nombre_coincide and gt_archer != "N/A (Sin GT)":
+            errores_especificos.append(f"👤 <b>Nombre Arquero:</b> Leído <code>'{arquero_trans}'</code> ≠ Real GT <code>'{gt_archer}'</code>")
+
+        if has_gt and calc_total != gt_total:
+            errores_especificos.append(f"📊 <b>Puntaje Total:</b> Calculado <code>{calc_total} pts</code> ≠ Real GT <code>{gt_total} pts</code> (Papel leído: {tot_ofic} pts)")
+        elif tot_ofic > 0 and tot_ofic != calc_total:
+            errores_especificos.append(f"⚠️ <b>Suma Interna:</b> Flechas sumadas <code>{calc_total} pts</code> ≠ Papel <code>{tot_ofic} pts</code>")
 
         for s in series:
             n_serie = s.get("serie", 1)
             flechas_aud = s.get("flechas_auditadas", [])
             for f_idx in range(1, 4):
                 col_name = f"{n_serie}_{f_idx}"
-                if col_name not in df_gt.columns:
-                    continue
-
-                gt_val = str(row_gt[col_name]).strip().upper()
-                if gt_val in ['NAN', 'NONE', '']:
-                    gt_val = 'M'
 
                 tr_val = str(flechas_aud[f_idx-1]).strip().upper() if f_idx <= len(flechas_aud) else 'M'
-
-                norm_gt = '10' if gt_val == 'X' else gt_val
                 norm_tr = '10' if tr_val == 'X' else tr_val
 
-                total_flechas_evaluadas += 1
-                p_flechas_tot += 1
-                if norm_gt == norm_tr:
-                    flechas_correctas += 1
-                    p_flechas_corr += 1
+                if has_gt and col_name in df_gt.columns:
+                    gt_val = str(row_gt[col_name]).strip().upper()
+                    if gt_val in ['NAN', 'NONE', '']:
+                        gt_val = 'M'
+                    norm_gt = '10' if gt_val == 'X' else gt_val
 
-        if p_flechas_tot > 0 and p_flechas_corr == p_flechas_tot:
+                    total_flechas_evaluadas += 1
+                    p_flechas_tot += 1
+                    if norm_gt == norm_tr:
+                        flechas_correctas += 1
+                        p_flechas_corr += 1
+                    else:
+                        errores_especificos.append(f"🎯 <b>Serie {n_serie}, Flecha {f_idx}:</b> Leído <code>'{tr_val}'</code> ≠ GT <code>'{gt_val}'</code>")
+
+        if has_gt and p_flechas_tot > 0 and p_flechas_corr == p_flechas_tot:
             planillas_exactas += 1
+
+        agente3_advs = item.get("advertencias", []) + item.get("errores", [])
+        for a_adv in agente3_advs:
+            if "≠" in a_adv or "discrepancia" in a_adv.lower() or "deducida" in a_adv.lower() or "reconciliada" in a_adv.lower() or "no detectado" in a_adv.lower():
+                clean_adv = a_adv.replace("💡 ", "").replace("⚠️ ", "").replace("ℹ️ ", "")
+                if not any(clean_adv in e for e in errores_especificos):
+                    errores_especificos.append(f"⚖️ {clean_adv}")
+
+        if errores_especificos or estado_aud != "APROBADO_AUTOMATICO" or score_certeza < 90.0:
+            detalles_errores_planillas.append({
+                "pagina": pagina,
+                "target_id": target_id,
+                "target": target,
+                "arquero_trans": arquero_trans,
+                "gt_archer": gt_archer,
+                "tot_ofic": tot_ofic,
+                "calc_total": calc_total,
+                "gt_total": gt_total if has_gt else "N/A",
+                "score_certeza": score_certeza,
+                "estado_auditoria": estado_aud,
+                "ruta_recorte": p_img,
+                "errores": errores_especificos
+            })
 
     prec_flecha_pct = round((flechas_correctas / total_flechas_evaluadas) * 100, 1) if total_flechas_evaluadas > 0 else 96.5
     error_flecha_pct = round(100.0 - prec_flecha_pct, 1)
     planillas_exactas_pct = round((planillas_exactas / total_planillas_evaluadas) * 100, 1) if total_planillas_evaluadas > 0 else 91.7
     prec_totales_pct = round((coincidencias_total_puntos / total_planillas_evaluadas) * 100, 1) if total_planillas_evaluadas > 0 else 95.8
 
+    html_tabla_errores = ""
+    if detalles_errores_planillas:
+        html_tabla_errores += f"""
+        <h4 style="color:#f87171; margin-top:25px; margin-bottom:8px; border-bottom:2px solid #ef4444; padding-bottom:6px;">
+            🔍 Registro Detallado de Errores y Discrepancias Detectadas ({len(detalles_errores_planillas)} planillas requieren revisión humana)
+        </h4>
+        <p style="font-size:12px; color:#cbd5e1; margin-bottom:12px;">
+            Haz clic en la miniatura de cualquier recorte para <b>abrir la imagen en HD en una ventana/pestaña nueva</b> e inspeccionar la causa exacta del error.
+        </p>
+        <table style="width:100%; border-collapse:collapse; margin-top:5px; font-size:12px; text-align:left;">
+            <thead>
+                <tr style="background:#7f1d1d; color:#fef2f2;">
+                    <th style="padding:8px; text-align:center;">Recorte (HD)</th>
+                    <th style="padding:8px;">Posición / Diana</th>
+                    <th style="padding:8px;">Arquero Leído vs GT</th>
+                    <th style="padding:8px;">Totales (Calc / Papel / GT)</th>
+                    <th style="padding:8px;">Detalle Específico de Discrepancias / Errores</th>
+                    <th style="padding:8px; text-align:center;">Estado / Certeza</th>
+                </tr>
+            </thead>
+            <tbody>
+        """
+        for err_item in detalles_errores_planillas:
+            p_img = err_item["ruta_recorte"]
+            thumb_html = _generar_thumb_html(p_img)
+            pag_tgt = f"Pág {err_item['pagina']} - Diana {err_item['target']}"
+            arq_info = f"<b>{err_item['arquero_trans']}</b>"
+            if err_item['gt_archer'] != "N/A (Sin GT)" and err_item['gt_archer'] != err_item['arquero_trans']:
+                arq_info += f"<br><small style='color:#f59e0b;'>Real GT: {err_item['gt_archer']}</small>"
+
+            tot_info = f"Calc: <b>{err_item['calc_total']}</b> | Papel: {err_item['tot_ofic']} | GT: <b>{err_item['gt_total']}</b>"
+
+            list_errs_html = "<ul style='margin:0; padding-left:16px; color:#fca5a5;'>"
+            for e_str in err_item["errores"]:
+                list_errs_html += f"<li style='margin-bottom:3px;'>{e_str}</li>"
+            list_errs_html += "</ul>"
+
+            score = err_item["score_certeza"]
+            est = err_item["estado_auditoria"]
+            if est == "REQUIERE_REVISION_HUMANA" or score < 60.0:
+                badge_est = f"<span style='background:#991b1b; color:#fecdd3; padding:3px 8px; border-radius:4px; font-weight:bold;'>🔴 REVISIÓN ({score}%)</span>"
+            else:
+                badge_est = f"<span style='background:#854d0e; color:#fef08a; padding:3px 8px; border-radius:4px; font-weight:bold;'>🟡 ATENCIÓN ({score}%)</span>"
+
+            html_tabla_errores += f"""
+                <tr style="border-bottom:1px solid #334155; background:#1e1b4b;">
+                    <td style="padding:8px; text-align:center; vertical-align:top;">{thumb_html}</td>
+                    <td style="padding:8px; vertical-align:top; color:#38bdf8;"><b>{pag_tgt}</b></td>
+                    <td style="padding:8px; vertical-align:top;">{arq_info}</td>
+                    <td style="padding:8px; vertical-align:top;">{tot_info}</td>
+                    <td style="padding:8px; vertical-align:top;">{list_errs_html}</td>
+                    <td style="padding:8px; text-align:center; vertical-align:top;">{badge_est}</td>
+                </tr>
+            """
+        html_tabla_errores += "</tbody></table>"
+    else:
+        html_tabla_errores = """
+        <div style="background:#064e3b; color:#a7f3d0; padding:15px; border-radius:8px; border:1px solid #059669; margin-top:20px;">
+            <b>✅ ¡Excelente! No se detectaron errores ni discrepancias entre la inferencia del modelo y la Verdad Terreno.</b>
+            <p style="margin:5px 0 0 0; font-size:12px;">Todas las flechas, sumatorias y datos de cabecera coincidieron al 100%.</p>
+        </div>
+        """
+
+    csv_name = os.path.basename(csv_path) if csv_path else "Ninguno"
+
     html = f"""
     <div style="background:#1e293b; color:#e2e8f0; padding:20px; border-radius:12px; border:1px solid #334155;">
-        <h3 style="color:#38bdf8; margin-top:0; border-bottom:2px solid #0284c7; padding-bottom:8px;">📊 Métricas de Eficacia y Error de Lectura (Cotejo vs. Verdad Terreno)</h3>
+        <h3 style="color:#38bdf8; margin-top:0; border-bottom:2px solid #0284c7; padding-bottom:8px;">
+            📊 Métricas de Eficacia y Error de Lectura (Dataset: <code>{csv_name}</code>)
+        </h3>
         
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin:20px 0;">
             <div style="background:#0f172a; padding:15px; border-radius:8px; border-left:4px solid #38bdf8;">
@@ -734,15 +859,18 @@ def calcular_metricas_evaluacion(manifiesto_3, csv_path=None):
                 </tr>
             </tbody>
         </table>
+
+        {html_tabla_errores}
     </div>
     """
     return html
 
 
+
 # --- CONSTRUCCIÓN DE LA INTERFAZ WEB GRADIO ---
 def build_ui():
-    with gr.Blocks(title="🎯 Sistema Multi-Agente - Tiro con Arco (v72)") as demo:
-        gr.Markdown("# 🎯 Sistema Multi-Agente - Tiro con Arco (v72 - Pre-OCR, Auditoría Lógica y Métricas de Eficacia)")
+    with gr.Blocks(title="🎯 Sistema Multi-Agente - Tiro con Arco (v75)") as demo:
+        gr.Markdown("# 🎯 Sistema Multi-Agente - Tiro con Arco (v75 - Pre-OCR, Auditoría Lógica, Métricas de Eficacia y Tabla Detallada de Errores)")
         gr.Markdown("Flujo de Alta Precisión: **Paso 0** (Carga + Render HD scale=3) ➡️ **Paso 1** (Segmentación con Pre-OCR) ➡️ **Paso 2** (OCR Sincronizado + Miniaturas HD) ➡️ **Paso 3** (Auditoría Lógica Agente 3) ➡️ **Métricas** (Eficacia y Error vs Verdad Terreno).")
 
         state_manifiesto_1 = gr.State(None)
@@ -953,7 +1081,7 @@ def build_ui():
 
 def main():
     print("=" * 60)
-    print("🚀 Servidor Principal Multi-Agente (v72) - Tiro con Arco")
+    print("🚀 Servidor Principal Multi-Agente (v75) - Tiro con Arco")
     print("🌍 Abre tu navegador en: http://localhost:7860")
     print("=" * 60)
     demo = build_ui()
