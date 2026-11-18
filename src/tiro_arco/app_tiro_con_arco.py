@@ -1,3 +1,4 @@
+import time
 import os
 import glob
 import sys
@@ -67,7 +68,9 @@ def _generar_thumb_html(ruta_img, max_dim=140):
 
 
 # --- PASO 0: CARGA Y RENDERING DE PÁGINAS ---
-def cargar_documento_paso0(archivo_input):
+def cargar_documento_paso0(archivo_input, state_tiempos=None):
+    t0 = time.time()
+    tiempos = dict(state_tiempos) if state_tiempos else {}
     if archivo_input is None:
         return (
             "⚠️ Por favor sube un archivo PDF o imagen válido.",
@@ -83,7 +86,8 @@ def cargar_documento_paso0(archivo_input):
             gr.update(interactive=False), # btn_paso1
             gr.update(interactive=False), # btn_paso2
             gr.update(interactive=False), # btn_paso3
-            gr.update(interactive=False)  # btn_metricas
+            gr.update(interactive=False), # btn_metricas
+            {"paso0": 0.0, "paso1": 0.0, "paso2": 0.0, "paso3": 0.0}
         )
 
     ruta = archivo_input.name
@@ -102,6 +106,8 @@ def cargar_documento_paso0(archivo_input):
     img_init = paginas[0]["ruta_actual"] if paginas else None
     msg_status = f"✅ Documento cargado en alta definición: `{os.path.basename(ruta)}`. Se extrajeron `{len(paginas)}` página(s) con Pre-OCR a nivel de hoja. Puedes revisar y mejorar la calidad antes de segmentar cuadrantes."
 
+    t_elapsed = round(time.time() - t0, 2)
+    tiempos["paso0"] = t_elapsed
     return (
         msg_status,
         galeria_paginas,
@@ -116,7 +122,8 @@ def cargar_documento_paso0(archivo_input):
         gr.update(interactive=True),  # Activa Paso 1
         gr.update(interactive=False), # Desactiva Paso 2
         gr.update(interactive=False), # Desactiva Paso 3
-        gr.update(interactive=False)  # Desactiva Métricas
+        gr.update(interactive=False), # Desactiva Métricas
+        tiempos
     )
 
 
@@ -189,7 +196,9 @@ def deshacer_todas_las_paginas_ui():
 
 
 # --- PASO 1: SEGMENTACIÓN DE CUADRANTES ---
-def ejecutar_paso1_segmentacion(archivo_input, tipo_manual):
+def ejecutar_paso1_segmentacion(archivo_input, tipo_manual, state_tiempos=None):
+    t0 = time.time()
+    tiempos = dict(state_tiempos) if state_tiempos else {}
     if not agente1.paginas_cache and archivo_input:
         agente1.extraer_paginas_pdf_o_imagen(archivo_input.name)
 
@@ -204,7 +213,8 @@ def ejecutar_paso1_segmentacion(archivo_input, tipo_manual):
             None,
             gr.update(interactive=True),  # btn_paso1 sigue interactivo si falló
             gr.update(interactive=False), # btn_paso2
-            gr.Tabs(selected="tab_paso0")
+            gr.Tabs(selected="tab_paso0"),
+            tiempos
         )
 
     ruta = archivo_input.name if archivo_input else "documento.pdf"
@@ -256,6 +266,8 @@ def ejecutar_paso1_segmentacion(archivo_input, tipo_manual):
     resumen_md += f"- **Cuadrantes Detectados:** `{len(tareas)}` en `{len(agente1.paginas_cache)}` página(s).\n\n"
     resumen_md += "Selecciona abajo los cuadrantes que deseas enviar al OCR y haz clic en **👁️ Paso 2: Ejecutar OCR**."
 
+    t_elapsed = round(time.time() - t0, 2)
+    tiempos["paso1"] = t_elapsed
     return (
         resumen_md,
         galeria_cuadrantes,
@@ -266,7 +278,8 @@ def ejecutar_paso1_segmentacion(archivo_input, tipo_manual):
         manifiesto_1,
         gr.update(interactive=False), # Desactiva btn_paso1 (ya ejecutado)
         gr.update(interactive=True),  # Activa btn_paso2
-        gr.Tabs(selected="tab_paso1") # REDIRIGE A LA PESTAÑA PASO 1
+        gr.Tabs(selected="tab_paso1"), # REDIRIGE A LA PESTAÑA PASO 1
+        tiempos
     )
 
 
@@ -333,14 +346,16 @@ def deshacer_todos_los_recortes_ui():
 
 
 # --- PASO 2: OCR ---
-def ejecutar_paso2_ocr(seleccionados, manifiesto_1, manifiesto_2_previo):
+def ejecutar_paso2_ocr(seleccionados, manifiesto_1, manifiesto_2_previo, state_tiempos=None):
+    t0 = time.time()
+    tiempos = dict(state_tiempos) if state_tiempos else {}
     empty_audit_json = json.dumps({"info": "Haz clic en Paso 3 abajo para auditar los resultados."}, indent=2, ensure_ascii=False)
 
     if not manifiesto_1:
-        return "⚠️ Primero debes ejecutar el Paso 1 (Segmentación).", "{}", [], gr.CheckboxGroup(choices=[]), manifiesto_1, None, None, "", "{}", None, gr.Dropdown(choices=[]), gr.Dropdown(choices=[]), empty_audit_json, gr.update(interactive=True), gr.update(interactive=False), gr.Tabs(selected="tab_paso1")
+        return "⚠️ Primero debes ejecutar el Paso 1 (Segmentación).", "{}", [], gr.CheckboxGroup(choices=[]), manifiesto_1, None, None, "", "{}", None, gr.Dropdown(choices=[]), gr.Dropdown(choices=[]), empty_audit_json, gr.update(interactive=True), gr.update(interactive=False), gr.Tabs(selected="tab_paso1"), tiempos
 
     if not seleccionados:
-        return "⚠️ Por favor selecciona al menos un cuadrante para realizar el OCR.", "{}", [], gr.CheckboxGroup(choices=[]), manifiesto_1, manifiesto_2_previo, None, "", "{}", None, gr.Dropdown(choices=[]), gr.Dropdown(choices=[]), empty_audit_json, gr.update(interactive=True), gr.update(interactive=False), gr.Tabs(selected="tab_paso1")
+        return "⚠️ Por favor selecciona al menos un cuadrante para realizar el OCR.", "{}", [], gr.CheckboxGroup(choices=[]), manifiesto_1, manifiesto_2_previo, None, "", "{}", None, gr.Dropdown(choices=[]), gr.Dropdown(choices=[]), empty_audit_json, gr.update(interactive=True), gr.update(interactive=False), gr.Tabs(selected="tab_paso1"), tiempos
 
     print(f"[UI] 👁️ Ejecutando Paso 2 (OCR) para {len(seleccionados)} cuadrante(s): {seleccionados}")
 
@@ -436,6 +451,8 @@ def ejecutar_paso2_ocr(seleccionados, manifiesto_1, manifiesto_2_previo):
     }
     json_str = json.dumps(manifiesto_combinado, indent=2, ensure_ascii=False)
 
+    t_elapsed = round(time.time() - t0, 2)
+    tiempos["paso2"] = t_elapsed
     return (
         resumen_md,
         json_str,
@@ -449,7 +466,8 @@ def ejecutar_paso2_ocr(seleccionados, manifiesto_1, manifiesto_2_previo):
         str_aud_json,
         gr.update(interactive=False), # Desactiva btn_paso2 (ya ejecutado)
         gr.update(interactive=True),  # Activa btn_paso3
-        gr.Tabs(selected="tab_paso2") # REDIRIGE A LA PESTAÑA PASO 2
+        gr.Tabs(selected="tab_paso2"), # REDIRIGE A LA PESTAÑA PASO 2
+        tiempos
     )
 
 
@@ -474,10 +492,12 @@ def inspeccionar_recorte(opcion_seleccionada, manifiesto_2):
 
 
 # --- PASO 3: AUDITORÍA ---
-def ejecutar_paso3_auditoria(manifiesto_1, manifiesto_2):
+def ejecutar_paso3_auditoria(manifiesto_1, manifiesto_2, criterio_orden="Prioridad (Nivel de Urgencia)", state_tiempos=None):
+    t0 = time.time()
+    tiempos = dict(state_tiempos) if state_tiempos else {}
     if not manifiesto_2:
         empty_audit_json = json.dumps({"info": "Primero debes ejecutar el Paso 2 (OCR)."}, indent=2, ensure_ascii=False)
-        return "⚠️ Primero debes ejecutar el Paso 2 (OCR).", "{}", gr.Dropdown(choices=[]), empty_audit_json, None, "{}", "<div style='padding:15px; background:#fff3cd;'>⚠️ Ejecuta el Paso 2 antes de auditar.</div>", gr.update(interactive=True), gr.update(interactive=False), gr.Tabs(selected="tab_paso2")
+        return "⚠️ Primero debes ejecutar el Paso 2 (OCR).", "{}", gr.Dropdown(choices=[]), empty_audit_json, None, "{}", "<div style='padding:15px; background:#fff3cd;'>⚠️ Ejecuta el Paso 2 antes de auditar.</div>", gr.update(interactive=True), gr.update(interactive=False), gr.Tabs(selected="tab_paso2"), tiempos
 
     print(f"[UI] ⚖️ Ejecutando Paso 3 (Agente 3 - Auditoría Lógica y Reconciliación)...")
     manifiesto_3 = agente3.auditar_manifiesto_completo(manifiesto_2)
@@ -552,7 +572,9 @@ def ejecutar_paso3_auditoria(manifiesto_1, manifiesto_2):
     }
     json_str = json.dumps(manifiesto_combinado, indent=2, ensure_ascii=False)
 
-    html_metricas = calcular_metricas_evaluacion(manifiesto_3)
+    t_elapsed = round(time.time() - t0, 2)
+    tiempos["paso3"] = t_elapsed
+    html_metricas = calcular_metricas_evaluacion(manifiesto_3, criterio_orden=criterio_orden, state_tiempos=tiempos)
 
     return (
         resumen_md,
@@ -564,7 +586,8 @@ def ejecutar_paso3_auditoria(manifiesto_1, manifiesto_2):
         html_metricas,
         gr.update(interactive=False), # Desactiva btn_paso3 (ya ejecutado)
         gr.update(interactive=True),  # Activa btn_metricas
-        gr.Tabs(selected="tab_paso3") # REDIRIGE A LA PESTAÑA PASO 3
+        gr.Tabs(selected="tab_paso3"), # REDIRIGE A LA PESTAÑA PASO 3
+        tiempos
     )
 
 
@@ -584,8 +607,8 @@ def inspeccionar_auditoria(opcion_seleccionada, manifiesto_3):
     return json.dumps({"info": "⚠️ Detalle de auditoría no encontrado."}, indent=2, ensure_ascii=False)
 
 
-def ir_a_metricas_ui(manifiesto_3):
-    html_out = calcular_metricas_evaluacion(manifiesto_3)
+def ir_a_metricas_ui(manifiesto_3, criterio_orden="Prioridad (Nivel de Urgencia)", state_tiempos=None):
+    html_out = calcular_metricas_evaluacion(manifiesto_3, criterio_orden=criterio_orden, state_tiempos=state_tiempos)
     return (
         html_out,
         gr.update(interactive=False), # Desactiva btn_metricas (ya visto)
@@ -594,7 +617,7 @@ def ir_a_metricas_ui(manifiesto_3):
 
 
 # --- CÁLCULO DE MÉTRICAS DE EFICACIA Y ERROR (CORRECCIÓN #1 DEL PROFESOR) ---
-def calcular_metricas_evaluacion(manifiesto_3, csv_path=None):
+def calcular_metricas_evaluacion(manifiesto_3, csv_path=None, criterio_orden="Prioridad (Nivel de Urgencia)", state_tiempos=None):
     if not manifiesto_3 or not isinstance(manifiesto_3, dict):
         return """
         <div style="background-color: #0f172a; color: #94a3b8; padding: 20px; border-radius: 10px; border: 1px solid #334155;">
@@ -756,12 +779,23 @@ def calcular_metricas_evaluacion(manifiesto_3, csv_path=None):
     planillas_exactas_pct = round((planillas_exactas / total_planillas_evaluadas) * 100, 1) if total_planillas_evaluadas > 0 else 91.7
     prec_totales_pct = round((coincidencias_total_puntos / total_planillas_evaluadas) * 100, 1) if total_planillas_evaluadas > 0 else 95.8
 
+    # Ordenamiento configurable de discrepancias / errores
+    if "Cantidad" in str(criterio_orden):
+        detalles_errores_planillas.sort(key=lambda x: (-len(x["errores"]), x["score_certeza"]))
+        criterio_lbl = "Organizado por: <b>Cantidad de Discrepancias / Errores</b> (Mayor número de errores primero)"
+    else:
+        detalles_errores_planillas.sort(key=lambda x: (x["score_certeza"], -len(x["errores"])))
+        criterio_lbl = "Organizado por: <b>Prioridad / Nivel de Urgencia</b> (Mayor urgencia de revisión humana primero)"
+
     html_tabla_errores = ""
     if detalles_errores_planillas:
         html_tabla_errores += f"""
-        <h4 style="color:#f87171; margin-top:25px; margin-bottom:8px; border-bottom:2px solid #ef4444; padding-bottom:6px;">
+        <h4 style="color:#f87171; margin-top:25px; margin-bottom:4px; border-bottom:2px solid #ef4444; padding-bottom:6px;">
             🔍 Registro Detallado de Errores y Discrepancias Detectadas ({len(detalles_errores_planillas)} planillas requieren revisión humana)
         </h4>
+        <div style="font-size:12px; color:#f59e0b; margin-bottom:8px;">
+            📌 {criterio_lbl}
+        </div>
         <p style="font-size:12px; color:#cbd5e1; margin-bottom:12px;">
             Haz clic en la miniatura de cualquier recorte para <b>abrir la imagen en HD en una ventana/pestaña nueva</b> e inspeccionar la causa exacta del error.
         </p>
@@ -820,6 +854,43 @@ def calcular_metricas_evaluacion(manifiesto_3, csv_path=None):
         """
 
     csv_name = os.path.basename(csv_path) if csv_path else "Ninguno"
+
+    tiempos = state_tiempos or {}
+    t_p0 = float(tiempos.get("paso0", 0.0))
+    t_p1 = float(tiempos.get("paso1", 0.0))
+    t_p2 = float(tiempos.get("paso2", 0.0))
+    t_p3 = float(tiempos.get("paso3", 0.0))
+    t_tot = round(t_p0 + t_p1 + t_p2 + t_p3, 2)
+
+    html_tiempos_grid = f"""
+    <div style="background:#0f172a; padding:15px; border-radius:10px; border:1px solid #334155; margin-top:20px;">
+        <h4 style="color:#38bdf8; margin-top:0; margin-bottom:12px; font-size:14px; border-bottom:1px solid #1e293b; padding-bottom:6px;">
+            ⏱️ Registro de Tiempos de Ejecución del Pipeline por Paso
+        </h4>
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap:10px; text-align:center;">
+            <div style="background:#1e293b; padding:10px; border-radius:8px; border:1px solid #334155;">
+                <span style="color:#94a3b8; font-size:11px; display:block; text-transform:uppercase;">Paso 0 (Carga HD)</span>
+                <div style="font-size:18px; font-weight:bold; color:#f1f5f9; margin-top:4px;">{t_p0:.2f}s</div>
+            </div>
+            <div style="background:#1e293b; padding:10px; border-radius:8px; border:1px solid #334155;">
+                <span style="color:#94a3b8; font-size:11px; display:block; text-transform:uppercase;">Paso 1 (Segmentación)</span>
+                <div style="font-size:18px; font-weight:bold; color:#f1f5f9; margin-top:4px;">{t_p1:.2f}s</div>
+            </div>
+            <div style="background:#1e293b; padding:10px; border-radius:8px; border:1px solid #334155;">
+                <span style="color:#94a3b8; font-size:11px; display:block; text-transform:uppercase;">Paso 2 (OCR Inferencia)</span>
+                <div style="font-size:18px; font-weight:bold; color:#f1f5f9; margin-top:4px;">{t_p2:.2f}s</div>
+            </div>
+            <div style="background:#1e293b; padding:10px; border-radius:8px; border:1px solid #334155;">
+                <span style="color:#94a3b8; font-size:11px; display:block; text-transform:uppercase;">Paso 3 (Auditoría)</span>
+                <div style="font-size:18px; font-weight:bold; color:#f1f5f9; margin-top:4px;">{t_p3:.2f}s</div>
+            </div>
+            <div style="background:#0284c7; padding:10px; border-radius:8px; border:1px solid #38bdf8;">
+                <span style="color:#e0f2fe; font-size:11px; display:block; font-weight:bold; text-transform:uppercase;">TIEMPO TOTAL</span>
+                <div style="font-size:18px; font-weight:bold; color:#ffffff; margin-top:4px;">{t_tot:.2f}s</div>
+            </div>
+        </div>
+    </div>
+    """
 
     html = f"""
     <div style="background:#1e293b; color:#e2e8f0; padding:20px; border-radius:12px; border:1px solid #334155;">
@@ -886,6 +957,8 @@ def calcular_metricas_evaluacion(manifiesto_3, csv_path=None):
             </tbody>
         </table>
 
+        {html_tiempos_grid}
+
         {html_tabla_errores}
     </div>
     """
@@ -901,14 +974,14 @@ def build_ui():
     .tab-nav button { font-weight: bold; font-size: 14px; padding: 10px 16px; }
     """
 
-    with gr.Blocks(title="🎯 Sistema Multi-Agente - Tiro con Arco (v78)", css=custom_css) as demo:
+    with gr.Blocks(title="🎯 Sistema Multi-Agente - Tiro con Arco (v79)", css=custom_css) as demo:
         with gr.Row(elem_id="header-bar", variant="compact"):
             with gr.Column(scale=3):
                 gr.HTML("""
                 <div style="display:flex; align-items:center; gap:12px; padding:8px 0;">
                     <div style="background:#0284c7; padding:10px; border-radius:10px; font-size:24px;">🎯</div>
                     <div>
-                        <h1 class="app-title">🎯 Sistema Multi-Agente - Tiro con Arco (v78)</h1>
+                        <h1 class="app-title">🎯 Sistema Multi-Agente - Tiro con Arco (v79)</h1>
                         <p class="app-subtitle">Navegación Modular Autoescalable • Segmentación, OCR Vision-Language y Auditoría Lógica en Vivo</p>
                     </div>
                 </div>
@@ -924,6 +997,7 @@ def build_ui():
         state_manifiesto_1 = gr.State(None)
         state_manifiesto_2 = gr.State(None)
         state_manifiesto_3 = gr.State(None)
+        state_tiempos = gr.State({"paso0": 0.0, "paso1": 0.0, "paso2": 0.0, "paso3": 0.0})
 
         with gr.Tabs(elem_classes=["tab-nav"]) as tabs_main:
 
@@ -1031,6 +1105,12 @@ def build_ui():
             with gr.Tab("📊 Métricas y Registro de Errores", id="tab_metricas"):
                 with gr.Row():
                     with gr.Column():
+                        radio_orden_metricas = gr.Radio(
+                            choices=["Prioridad (Nivel de Urgencia)", "Cantidad de Discrepancias / Errores"],
+                            value="Prioridad (Nivel de Urgencia)",
+                            label="⚙️ Organizar Tabla de Errores / Discrepancias Por:",
+                            interactive=True
+                        )
                         html_metricas_out = gr.HTML(value="""
                         <div style="background-color: #0f172a; color: #94a3b8; padding: 20px; border-radius: 10px; border: 1px solid #334155;">
                             <h4 style="color: #38bdf8; margin-top: 0;">📊 Evaluación del MVP contra Verdad Terreno</h4>
@@ -1047,12 +1127,12 @@ def build_ui():
         # --- EVENTOS Y CONTROL DE ESTADOS DE BOTONES Y REDIRECCIÓN DE PESTAÑAS ---
         btn_cargar.click(
             fn=cargar_documento_paso0,
-            inputs=[file_input],
+            inputs=[file_input, state_tiempos],
             outputs=[
                 status_paso0, galeria_paginas_out, dropdown_paginas, visor_pagina_out, diagnostico_paso1_out,
                 galeria_cuadrantes_out, dropdown_cuadrantes, visor_cuadrante_out,
                 checkbox_cuadrantes, json_out,
-                btn_paso1, btn_paso2, btn_paso3, btn_metricas
+                btn_paso1, btn_paso2, btn_paso3, btn_metricas, state_tiempos
             ]
         )
 
@@ -1088,11 +1168,11 @@ def build_ui():
 
         btn_paso1.click(
             fn=ejecutar_paso1_segmentacion,
-            inputs=[file_input, tipo_manual],
+            inputs=[file_input, tipo_manual, state_tiempos],
             outputs=[
                 diagnostico_paso1_out, galeria_cuadrantes_out, dropdown_cuadrantes, visor_cuadrante_out,
                 checkbox_cuadrantes, json_out, state_manifiesto_1,
-                btn_paso1, btn_paso2, tabs_main
+                btn_paso1, btn_paso2, tabs_main, state_tiempos
             ]
         )
 
@@ -1128,11 +1208,11 @@ def build_ui():
 
         btn_paso2.click(
             fn=ejecutar_paso2_ocr,
-            inputs=[checkbox_cuadrantes, state_manifiesto_1, state_manifiesto_2],
+            inputs=[checkbox_cuadrantes, state_manifiesto_1, state_manifiesto_2, state_tiempos],
             outputs=[
                 diagnostico_paso2_out, json_out, galeria_cuadrantes_out, state_manifiesto_1, state_manifiesto_2,
                 raw_ocr_out, json_inspector, image_inspector, dropdown_inspector, json_auditoria_nemotron,
-                btn_paso2, btn_paso3, tabs_main
+                btn_paso2, btn_paso3, tabs_main, state_tiempos
             ]
         )
 
@@ -1150,18 +1230,24 @@ def build_ui():
 
         btn_paso3.click(
             fn=ejecutar_paso3_auditoria,
-            inputs=[state_manifiesto_1, state_manifiesto_2],
+            inputs=[state_manifiesto_1, state_manifiesto_2, radio_orden_metricas, state_tiempos],
             outputs=[
                 diagnostico_paso3_out, json_out, dropdown_audit, json_audit_inspector, state_manifiesto_3,
                 json_auditoria_nemotron, html_metricas_out,
-                btn_paso3, btn_metricas, tabs_main
+                btn_paso3, btn_metricas, tabs_main, state_tiempos
             ]
         )
 
         btn_metricas.click(
             fn=ir_a_metricas_ui,
-            inputs=[state_manifiesto_3],
+            inputs=[state_manifiesto_3, radio_orden_metricas, state_tiempos],
             outputs=[html_metricas_out, btn_metricas, tabs_main]
+        )
+
+        radio_orden_metricas.change(
+            fn=lambda m3, ord_val, st: calcular_metricas_evaluacion(m3, criterio_orden=ord_val, state_tiempos=st),
+            inputs=[state_manifiesto_3, radio_orden_metricas, state_tiempos],
+            outputs=[html_metricas_out]
         )
 
     return demo
@@ -1169,7 +1255,7 @@ def build_ui():
 
 def main():
     print("=" * 60)
-    print("🚀 Servidor Principal Multi-Agente (v78) - Tiro con Arco")
+    print("🚀 Servidor Principal Multi-Agente (v79) - Tiro con Arco")
     print("🌍 Abre tu navegador en: http://localhost:7860")
     print("=" * 60)
     demo = build_ui()
