@@ -34,15 +34,12 @@ def _generar_thumb_html(ruta_img, max_dim=140):
         return "📷"
     try:
         img = Image.open(ruta_img).convert("RGB")
-        
-        # Generar miniatura optimizada
         img_thumb = img.copy()
         img_thumb.thumbnail((max_dim, max_dim))
         buf_thumb = BytesIO()
         img_thumb.save(buf_thumb, format="JPEG", quality=75)
         b64_thumb = base64.b64encode(buf_thumb.getvalue()).decode("utf-8")
 
-        # Generar versión en alta resolución para apertura directa en pestaña nueva
         img_full = img.copy()
         if max(img_full.size) > 1600:
             img_full.thumbnail((1600, 1600))
@@ -79,7 +76,11 @@ def cargar_documento_paso0(archivo_input):
             gr.Dropdown(choices=[], value=None),
             None,
             gr.CheckboxGroup(choices=[]),
-            "{}"
+            "{}",
+            gr.update(interactive=False), # btn_paso1
+            gr.update(interactive=False), # btn_paso2
+            gr.update(interactive=False), # btn_paso3
+            gr.update(interactive=False)  # btn_metricas
         )
 
     ruta = archivo_input.name
@@ -103,12 +104,16 @@ def cargar_documento_paso0(archivo_input):
         galeria_paginas,
         gr.Dropdown(choices=choices_paginas, value=primer_num, label="🔍 Seleccionar Página a Inspeccionar/Mejorar"),
         img_init,
-        "Páginas listas. Si estás satisfecho con la calidad, haz clic en **✂️ Paso 1: Dividir Cuadrantes**.",
+        "Páginas listas. Haz clic en **✂️ Paso 1: Dividir Cuadrantes**.",
         [],
         gr.Dropdown(choices=[], value=None),
         None,
         gr.CheckboxGroup(choices=[]),
-        "{}"
+        "{}",
+        gr.update(interactive=True),  # Activa Paso 1
+        gr.update(interactive=False), # Desactiva Paso 2
+        gr.update(interactive=False), # Desactiva Paso 3
+        gr.update(interactive=False)  # Desactiva Métricas
     )
 
 
@@ -148,7 +153,6 @@ def deshacer_pagina_seleccionada(num_pagina):
 
     img_actual = agente1.paginas_cache[num_pagina]["ruta_actual"] if num_pagina in agente1.paginas_cache else None
     return msg, galeria_paginas, gr.Dropdown(choices=choices_paginas, value=num_pagina), img_actual
-
 
 
 def mejorar_todas_las_paginas_ui():
@@ -194,7 +198,8 @@ def ejecutar_paso1_segmentacion(archivo_input, tipo_manual):
             None,
             gr.CheckboxGroup(choices=[]),
             "{}",
-            None
+            None,
+            gr.update(interactive=False) # btn_paso2
         )
 
     ruta = archivo_input.name if archivo_input else "documento.pdf"
@@ -244,7 +249,7 @@ def ejecutar_paso1_segmentacion(archivo_input, tipo_manual):
     json_str = json.dumps({"agente_1_manifiesto": manifiesto_1}, indent=2, ensure_ascii=False)
     resumen_md = f"### ✂️ **Paso 1 Completado:** División de Cuadrantes por Página con Pre-OCR\n\n"
     resumen_md += f"- **Cuadrantes Detectados:** `{len(tareas)}` en `{len(agente1.paginas_cache)}` página(s).\n\n"
-    resumen_md += "Puedes revisar y aplicar mejoramiento de calidad individual a cada recorte de cuadrante abajo. Haz clic en la miniatura de cualquier tabla para **abrir el recorte en alta resolución en una pestaña nueva**."
+    resumen_md += "Selecciona abajo los cuadrantes que deseas enviar al OCR y haz clic en **👁️ Paso 2: Ejecutar OCR**."
 
     return (
         resumen_md,
@@ -253,7 +258,8 @@ def ejecutar_paso1_segmentacion(archivo_input, tipo_manual):
         img_init,
         gr.CheckboxGroup(choices=opciones_checkbox, value=seleccionados_defecto, label="Seleccionar Cuadrantes Organizados por Página (Paso 2)"),
         json_str,
-        manifiesto_1
+        manifiesto_1,
+        gr.update(interactive=True) # Activa Paso 2
     )
 
 
@@ -291,7 +297,6 @@ def deshacer_recorte_seleccionado(label_recorte):
     return msg, galeria_cuadrantes, gr.Dropdown(choices=choices_cuadrantes, value=label_recorte), img_actual
 
 
-
 def mejorar_todos_los_recortes_ui():
     exito, msg = agente1.mejorar_todos_los_recortes()
     galeria_cuadrantes = []
@@ -325,10 +330,10 @@ def ejecutar_paso2_ocr(seleccionados, manifiesto_1, manifiesto_2_previo):
     empty_audit_json = json.dumps({"info": "Haz clic en Paso 3 abajo para auditar los resultados."}, indent=2, ensure_ascii=False)
 
     if not manifiesto_1:
-        return "⚠️ Primero debes ejecutar el Paso 1 (Segmentación).", "{}", [], gr.CheckboxGroup(choices=[]), manifiesto_1, None, None, "", "{}", None, gr.Dropdown(choices=[]), gr.Dropdown(choices=[]), empty_audit_json
+        return "⚠️ Primero debes ejecutar el Paso 1 (Segmentación).", "{}", [], gr.CheckboxGroup(choices=[]), manifiesto_1, None, None, "", "{}", None, gr.Dropdown(choices=[]), gr.Dropdown(choices=[]), empty_audit_json, gr.update(interactive=False)
 
     if not seleccionados:
-        return "⚠️ Por favor selecciona al menos un cuadrante para realizar el OCR.", "{}", [], gr.CheckboxGroup(choices=[]), manifiesto_1, manifiesto_2_previo, None, "", "{}", None, gr.Dropdown(choices=[]), gr.Dropdown(choices=[]), empty_audit_json
+        return "⚠️ Por favor selecciona al menos un cuadrante para realizar el OCR.", "{}", [], gr.CheckboxGroup(choices=[]), manifiesto_1, manifiesto_2_previo, None, "", "{}", None, gr.Dropdown(choices=[]), gr.Dropdown(choices=[]), empty_audit_json, gr.update(interactive=False)
 
     print(f"[UI] 👁️ Ejecutando Paso 2 (OCR) para {len(seleccionados)} cuadrante(s): {seleccionados}")
 
@@ -349,7 +354,7 @@ def ejecutar_paso2_ocr(seleccionados, manifiesto_1, manifiesto_2_previo):
     resumen_md = "### 📊 Diagnóstico Multi-Agente (Paso 2 - OCR completado)\n\n"
     resumen_md += f"- **Cuadrantes Procesados con OCR (Agente 2):** `{len(transcripciones)}` de `{len(seleccionados)}` seleccionados\n"
     resumen_md += f"- **Motor(es) de Inferencia Utilizados:** {modelos_str}\n\n"
-    resumen_md += "💡 *Tip:* **Haz clic en la miniatura de cualquier imagen de la tabla para abrir el recorte en alta resolución en una pestaña nueva.**\n\n"
+    resumen_md += "💡 *Tip:* **Haz clic en la miniatura de cualquier imagen para abrir la muestra HD en una pestaña nueva.**\n\n"
 
     resumen_md += "| Recorte | Posición | Diana | Arquero | Club | Cat | Estado / Modelo |\n"
     resumen_md += "| :---: | :--- | :---: | :--- | :--- | :---: | :--- |\n"
@@ -434,7 +439,8 @@ def ejecutar_paso2_ocr(seleccionados, manifiesto_1, manifiesto_2_previo):
         json_init,
         img_init,
         gr.Dropdown(choices=choices_inspector, value=primer_insp_key, label="🔍 Seleccionar Arquero/Cuadrante para Inspeccionar Salida en Crudo"),
-        str_aud_json
+        str_aud_json,
+        gr.update(interactive=True) # Activa Paso 3
     )
 
 
@@ -462,7 +468,7 @@ def inspeccionar_recorte(opcion_seleccionada, manifiesto_2):
 def ejecutar_paso3_auditoria(manifiesto_1, manifiesto_2):
     if not manifiesto_2:
         empty_audit_json = json.dumps({"info": "Primero debes ejecutar el Paso 2 (OCR)."}, indent=2, ensure_ascii=False)
-        return "⚠️ Primero debes ejecutar el Paso 2 (OCR).", "{}", gr.Dropdown(choices=[]), empty_audit_json, None, "{}", "<div style='padding:15px; background:#fff3cd;'>⚠️ Ejecuta el Paso 2 antes de auditar.</div>"
+        return "⚠️ Primero debes ejecutar el Paso 2 (OCR).", "{}", gr.Dropdown(choices=[]), empty_audit_json, None, "{}", "<div style='padding:15px; background:#fff3cd;'>⚠️ Ejecuta el Paso 2 antes de auditar.</div>", gr.update(interactive=False)
 
     print(f"[UI] ⚖️ Ejecutando Paso 3 (Agente 3 - Auditoría Lógica y Reconciliación)...")
     manifiesto_3 = agente3.auditar_manifiesto_completo(manifiesto_2)
@@ -546,7 +552,8 @@ def ejecutar_paso3_auditoria(manifiesto_1, manifiesto_2):
         audit_init,
         manifiesto_3,
         str_aud_json,
-        html_metricas
+        html_metricas,
+        gr.update(interactive=True) # Activa Métricas
     )
 
 
@@ -572,7 +579,7 @@ def calcular_metricas_evaluacion(manifiesto_3, csv_path=None):
         return """
         <div style="background-color: #0f172a; color: #94a3b8; padding: 20px; border-radius: 10px; border: 1px solid #334155;">
             <h4 style="color: #38bdf8; margin-top: 0;">📊 Evaluación del MVP contra Verdad Terreno</h4>
-            <p>Haz clic en el botón <b>📊 Calcular Métricas de Eficacia y Error (vs. Verdad Terreno)</b> tras ejecutar el <b>Paso 3</b> para ver la precisión del modelo y la tabla detallada de errores.</p>
+            <p>Ejecuta el <b>Paso 3 (Auditoría Lógica)</b> para calcular las métricas contra la Verdad Terreno y generar el registro detallado de errores.</p>
         </div>
         """
 
@@ -866,111 +873,200 @@ def calcular_metricas_evaluacion(manifiesto_3, csv_path=None):
     return html
 
 
-
-# --- CONSTRUCCIÓN DE LA INTERFAZ WEB GRADIO ---
+# --- CONSTRUCCIÓN DE LA INTERFAZ WEB GRADIO CON ENRUTADOR NAVEGABLE Y NIVELES ANIDADOS ---
 def build_ui():
-    with gr.Blocks(title="🎯 Sistema Multi-Agente - Tiro con Arco (v75)") as demo:
-        gr.Markdown("# 🎯 Sistema Multi-Agente - Tiro con Arco (v75 - Pre-OCR, Auditoría Lógica, Métricas de Eficacia y Tabla Detallada de Errores)")
-        gr.Markdown("Flujo de Alta Precisión: **Paso 0** (Carga + Render HD scale=3) ➡️ **Paso 1** (Segmentación con Pre-OCR) ➡️ **Paso 2** (OCR Sincronizado + Miniaturas HD) ➡️ **Paso 3** (Auditoría Lógica Agente 3) ➡️ **Métricas** (Eficacia y Error vs Verdad Terreno).")
+    custom_css = """
+    /* Header / Navbar Superior Estilo App Profesional */
+    .app-header {
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        border-bottom: 2px solid #3b82f6;
+        padding: 16px 24px;
+        margin-bottom: 16px;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+    .app-title {
+        color: #38bdf8;
+        font-size: 24px;
+        font-weight: 800;
+        margin: 0;
+        letter-spacing: -0.5px;
+    }
+    .app-subtitle {
+        color: #94a3b8;
+        font-size: 13px;
+        margin-top: 4px;
+    }
+    /* Estilizado de Tabs / Enrutador Secciones Responsivo */
+    .gr-tabs {
+        border-radius: 10px;
+        overflow: hidden;
+    }
+    .tab-nav button {
+        font-size: 14px !important;
+        font-weight: 600 !important;
+        padding: 10px 18px !important;
+    }
+    .step-box {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 16px;
+    }
+    .step-header {
+        border-bottom: 1px solid #334155;
+        padding-bottom: 10px;
+        margin-bottom: 16px;
+    }
+    """
+
+    with gr.Blocks(title="🎯 Sistema Multi-Agente - Tiro con Arco (v76)", css=custom_css) as demo:
+        with gr.Row(elem_classes=["app-header"]):
+            with gr.Column():
+                gr.HTML("""
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                    <div>
+                        <h1 class="app-title">🎯 Sistema Multi-Agente - Tiro con Arco (v76)</h1>
+                        <p class="app-subtitle">Navegación Modular Autoescalable • Segmentación, OCR Vision-Language y Auditoría Lógica en Vivo</p>
+                    </div>
+                    <div style="background:#1e293b; padding:8px 16px; border-radius:8px; border:1px solid #3b82f6;">
+                        <span style="color:#60a5fa; font-size:12px; font-weight:bold;">ESTADO PIPELINE:</span>
+                        <span style="color:#34d399; font-size:12px; margin-left:6px; font-weight:bold;">🟢 AGENTES LISTOS</span>
+                    </div>
+                </div>
+                """)
 
         state_manifiesto_1 = gr.State(None)
         state_manifiesto_2 = gr.State(None)
         state_manifiesto_3 = gr.State(None)
 
-        with gr.Row():
-            with gr.Column(scale=1):
-                file_input = gr.File(label="📂 Subir Planilla (Imagen PNG/JPG o PDF)", file_types=[".png", ".jpg", ".jpeg", ".pdf"])
-                tipo_manual = gr.Dropdown(
-                    label="Modo de Juego Manual (Opcional)",
-                    choices=["Auto", "info", "eliminatoria_2", "clasificacion_1", "clasificacion_2", "clasificacion_4"],
-                    value="Auto"
-                )
-                btn_cargar = gr.Button("🖼️ Cargar y Renderear Páginas", variant="primary")
+        with gr.Tabs(elem_classes=["tab-nav"]) as tabs_main:
 
-                gr.Markdown("---")
-                gr.Markdown("### 🛠️ Inspección y Mejora de Páginas (Paso 0)")
-                dropdown_paginas = gr.Dropdown(choices=[], label="🔍 Seleccionar Página a Inspeccionar/Mejorar")
+            # ==========================================
+            # TAB 0: PASO 0 - CARGA Y PÁGINAS COMPLETAS
+            # ==========================================
+            with gr.Tab("🖼️ Paso 0: Carga y Páginas", id="tab_paso0"):
                 with gr.Row():
-                    btn_mejorar_pag = gr.Button("✨ Mejorar Página Seleccionada")
-                    btn_deshacer_pag = gr.Button("↩️ Deshacer Página Seleccionada")
+                    with gr.Column(scale=1):
+                        gr.Markdown("### 📂 1. Carga de Documento")
+                        file_input = gr.File(label="Subir Planilla (PDF o Imagen)", file_types=[".png", ".jpg", ".jpeg", ".pdf"])
+                        tipo_manual = gr.Dropdown(
+                            label="Modo de Juego Manual (Opcional)",
+                            choices=["Auto", "info", "eliminatoria_2", "clasificacion_1", "clasificacion_2", "clasificacion_4"],
+                            value="Auto"
+                        )
+                        btn_cargar = gr.Button("🖼️ Cargar y Renderear Páginas", variant="primary")
+
+                        gr.Markdown("---")
+                        gr.Markdown("### 🛠️ 2. Inspección y Mejora de Páginas")
+                        dropdown_paginas = gr.Dropdown(choices=[], label="🔍 Seleccionar Página a Inspeccionar/Mejorar")
+                        with gr.Row():
+                            btn_mejorar_pag = gr.Button("✨ Mejorar Página")
+                            btn_deshacer_pag = gr.Button("↩️ Deshacer Página")
+                        with gr.Row():
+                            btn_mejorar_todas_pag = gr.Button("✨ Mejorar TODAS las Páginas", variant="secondary")
+                            btn_deshacer_todas_pag = gr.Button("↩️ Deshacer TODAS las Páginas")
+
+                        gr.Markdown("---")
+                        btn_paso1 = gr.Button("✂️ Paso 1: Dividir Cuadrantes en Páginas ➔", variant="primary", interactive=False)
+
+                    with gr.Column(scale=2):
+                        status_paso0 = gr.Markdown("Esperando archivo...")
+                        galeria_paginas_out = gr.Gallery(label="🖼️ Galería de Páginas Físicas Extraídas (HD)", columns=2, preview=True)
+                        visor_pagina_out = gr.Image(label="🖼️ Visor de Página Seleccionada", interactive=False)
+
+            # ==========================================
+            # TAB 1: PASO 1 - SEGMENTACIÓN DE CUADRANTES
+            # ==========================================
+            with gr.Tab("✂️ Paso 1: Segmentación", id="tab_paso1"):
                 with gr.Row():
-                    btn_mejorar_todas_pag = gr.Button("✨ Mejorar TODAS las Páginas", variant="secondary")
-                    btn_deshacer_todas_pag = gr.Button("↩️ Deshacer TODAS las Páginas")
-                btn_paso1 = gr.Button("✂️ Paso 1: Dividir Cuadrantes en Páginas", variant="primary")
+                    with gr.Column(scale=1):
+                        diagnostico_out = gr.Markdown("Ejecuta el **Paso 0** y luego haz clic en **Paso 1: Dividir Cuadrantes**.")
+                        
+                        gr.Markdown("---")
+                        gr.Markdown("### 🛠️ Inspección y Mejora de Recortes")
+                        dropdown_cuadrantes = gr.Dropdown(choices=[], label="🔍 Seleccionar Recorte de Cuadrante")
+                        with gr.Row():
+                            btn_mejorar_recorte = gr.Button("✨ Mejorar Recorte")
+                            btn_deshacer_recorte = gr.Button("↩️ Deshacer Recorte")
+                        with gr.Row():
+                            btn_mejorar_todos_recortes = gr.Button("✨ Mejorar TODOS los Recortes", variant="secondary")
+                            btn_deshacer_todos_recortes = gr.Button("↩️ Deshacer TODOS los Recortes")
 
-                gr.Markdown("---")
-                gr.Markdown("### 👁️ Selección y OCR (Paso 2)")
-                checkbox_cuadrantes = gr.CheckboxGroup(choices=[], label="Seleccionar Cuadrantes Organizados por Página (Paso 2)")
-                btn_paso2 = gr.Button("👁️ Paso 2: Ejecutar OCR en Seleccionados", variant="secondary")
+                        gr.Markdown("---")
+                        gr.Markdown("### 🎯 Seleccionar Cuadrantes para OCR")
+                        checkbox_cuadrantes = gr.CheckboxGroup(choices=[], label="Cuadrantes Detectados por Página")
+                        btn_paso2 = gr.Button("👁️ Paso 2: Ejecutar OCR en Seleccionados ➔", variant="primary", interactive=False)
 
-                gr.Markdown("---")
-                gr.Markdown("### ⚖️ Auditoría Lógica y Métricas (Paso 3)")
-                btn_paso3 = gr.Button("⚖️ Paso 3: Ejecutar Auditoría Lógica (Agente 3)", variant="primary")
-                btn_metricas = gr.Button("📊 Calcular Métricas de Eficacia y Error (vs. Verdad Terreno)", variant="secondary")
+                    with gr.Column(scale=2):
+                        galeria_cuadrantes_out = gr.Gallery(label="✂️ Galería de Recortes de Cuadrantes", columns=2, preview=True)
+                        visor_cuadrante_out = gr.Image(label="🖼️ Visor de Recorte de Cuadrante Seleccionado", interactive=False)
 
-            with gr.Column(scale=2):
-                status_paso0 = gr.Markdown("Esperando archivo...")
-                galeria_paginas_out = gr.Gallery(label="🖼️ Galería de Páginas Físicas Extraídas", columns=2, preview=True)
-                visor_pagina_out = gr.Image(label="🖼️ Visor de Página Seleccionada (Inspección y Enfoque)", interactive=False)
-
-                gr.Markdown("---")
-                diagnostico_out = gr.Markdown("Esperando división de cuadrantes (Paso 1)...")
-                galeria_cuadrantes_out = gr.Gallery(label="✂️ Galería de Recortes de Cuadrantes", columns=2, preview=True)
-
+            # ==========================================
+            # TAB 2: PASO 2 - OCR MULTI-MODELO
+            # ==========================================
+            with gr.Tab("👁️ Paso 2: OCR Extracción", id="tab_paso2"):
                 with gr.Row():
-                    dropdown_cuadrantes = gr.Dropdown(choices=[], label="🔍 Seleccionar Recorte de Cuadrante a Inspeccionar/Mejorar")
-                    visor_cuadrante_out = gr.Image(label="🖼️ Visor de Recorte de Cuadrante", interactive=False)
+                    with gr.Column(scale=1):
+                        gr.Markdown("### 👁️ Extracción de Texto con VLM / Nemotron")
+                        gr.Markdown("Procesa los cuadrantes seleccionados utilizando el modelo multimodal con rate-limiting y fallback local.")
+                        
+                        dropdown_inspector = gr.Dropdown(choices=[], label="🔍 Seleccionar Arquero/Cuadrante para Inspeccionar Crudo")
+                        image_inspector = gr.Image(label="🖼️ Recorte Interactivo", interactive=False)
+                        
+                        gr.Markdown("---")
+                        btn_paso3 = gr.Button("⚖️ Paso 3: Ejecutar Auditoría Lógica (Agente 3) ➔", variant="primary", interactive=False)
 
-                with gr.Row():
-                    btn_mejorar_recorte = gr.Button("✨ Mejorar Recorte Seleccionado")
-                    btn_deshacer_recorte = gr.Button("↩️ Deshacer Recorte Seleccionado")
-                with gr.Row():
-                    btn_mejorar_todos_recortes = gr.Button("✨ Mejorar TODOS los Recortes", variant="secondary")
-                    btn_deshacer_todos_recortes = gr.Button("↩️ Deshacer TODOS los Recortes")
+                    with gr.Column(scale=2):
+                        raw_ocr_out = gr.Code(label="📜 Salida en Crudo Retornada por Nemotron / VLM (Texto Bruto)", language="markdown")
+                        json_inspector = gr.Code(label="🎯 Campos JSON Procesados y Cotejados", language="json")
+                        json_auditoria_nemotron = gr.Code(label="📄 Auditoría Nemotron Raw vs JSON Refactorizado", language="json")
 
+            # ==========================================
+            # TAB 3: PASO 3 - AUDITORÍA Y RECONCILIACIÓN
+            # ==========================================
+            with gr.Tab("⚖️ Paso 3: Auditoría Lógica", id="tab_paso3"):
+                with gr.Row():
+                    with gr.Column(scale=1):
+                        gr.Markdown("### ⚖️ Auditoría Lógica y Control de Certeza (Agente 3)")
+                        gr.Markdown("Aplica las reglas de auditoría matemática, reconciliación de totales en papel y autocompletado por padrón local.")
+                        dropdown_audit = gr.Dropdown(choices=[], label="⚖️ Seleccionar Arquero/Cuadrante Auditado")
+                        
+                        gr.Markdown("---")
+                        btn_metricas = gr.Button("📊 Ir a Métricas y Evaluación ➔", variant="primary", interactive=False)
+
+                    with gr.Column(scale=2):
+                        json_audit_inspector = gr.Code(label="📋 Detalle Completo de Auditoría Agente 3", language="json")
+
+            # ==========================================
+            # TAB 4: MÉTRICAS Y TABLA DE ERRORES DETALLADA
+            # ==========================================
+            with gr.Tab("📊 Métricas y Registro de Errores", id="tab_metricas"):
+                with gr.Row():
+                    with gr.Column():
+                        html_metricas_out = gr.HTML(value="""
+                        <div style="background-color: #0f172a; color: #94a3b8; padding: 20px; border-radius: 10px; border: 1px solid #334155;">
+                            <h4 style="color: #38bdf8; margin-top: 0;">📊 Evaluación del MVP contra Verdad Terreno</h4>
+                            <p>Ejecuta el <b>Paso 3 (Auditoría Lógica)</b> para calcular la precisión del modelo y generar el registro detallado de errores.</p>
+                        </div>
+                        """)
+
+            # ==========================================
+            # TAB 5: MANIFIESTO COMPLETO JSON
+            # ==========================================
+            with gr.Tab("📄 Manifiesto JSON Global", id="tab_json"):
                 json_out = gr.Code(label="Manifiesto JSON Completo (Agente 1 + Agente 2 + Agente 3)", language="json")
 
-        gr.Markdown("---")
-        gr.Markdown("## 📊 Estadísticas de Eficacia y Tasa de Error (Evaluación del MVP - Corrección #1)")
-        html_metricas_out = gr.HTML(value="""
-        <div style="background-color: #0f172a; color: #94a3b8; padding: 20px; border-radius: 10px; border: 1px solid #334155;">
-            <h4 style="color: #38bdf8; margin-top: 0;">📊 Evaluación del MVP contra Verdad Terreno</h4>
-            <p>Haz clic en el botón <b>📊 Calcular Métricas de Eficacia y Error (vs. Verdad Terreno)</b> tras ejecutar el <b>Paso 3</b> para ver la precisión del modelo contra el dataset oficial.</p>
-        </div>
-        """)
-
-        gr.Markdown("---")
-        gr.Markdown("## ⚖️ Resultado de Auditoría Lógica y Control de Certeza (Paso 3)")
-
-        with gr.Row():
-            with gr.Column(scale=1):
-                dropdown_audit = gr.Dropdown(choices=[], label="⚖️ Seleccionar Arquero/Cuadrante para Inspeccionar Auditoría Agente 3")
-            with gr.Column(scale=2):
-                json_audit_inspector = gr.Code(label="📋 Detalle de Reconciliación y Auditoría (Agente 3)", language="json")
-
-        gr.Markdown("---")
-        gr.Markdown("## 📄 Auditoría JSON de Inferencia: Nemotron Raw vs JSON Refactorizado MVP")
-        json_auditoria_nemotron = gr.Code(label="📄 Archivo de Auditoría Nemotron Raw vs JSON Refactorizado (auditoria_nemotron_raw_vs_refactorizado.json)", language="json")
-
-        gr.Markdown("---")
-        gr.Markdown("## 🔬 Inspección Detallada y Visor de Recortes (Paso 2)")
-
-        with gr.Row():
-            with gr.Column(scale=1):
-                dropdown_inspector = gr.Dropdown(choices=[], label="🔍 Seleccionar Arquero/Cuadrante para Inspeccionar Salida en Crudo")
-                image_inspector = gr.Image(label="🖼️ Visor de Recorte Interactivo (Zoom / Pan / Pantalla Completa)", interactive=False)
-            with gr.Column(scale=2):
-                raw_ocr_out = gr.Code(label="📜 Salida en Crudo Retornada por Nemotron / VLM (Texto Bruto)", language="markdown")
-                json_inspector = gr.Code(label="🎯 Campos JSON Procesados y Cotejados", language="json")
-
-        # --- EVENTOS ---
+        # --- EVENTOS Y CONTROL DE ESTADOS DE BOTONES ---
         btn_cargar.click(
             fn=cargar_documento_paso0,
             inputs=[file_input],
             outputs=[
                 status_paso0, galeria_paginas_out, dropdown_paginas, visor_pagina_out, diagnostico_out,
                 galeria_cuadrantes_out, dropdown_cuadrantes, visor_cuadrante_out,
-                checkbox_cuadrantes, json_out
+                checkbox_cuadrantes, json_out,
+                btn_paso1, btn_paso2, btn_paso3, btn_metricas
             ]
         )
 
@@ -1009,7 +1105,8 @@ def build_ui():
             inputs=[file_input, tipo_manual],
             outputs=[
                 diagnostico_out, galeria_cuadrantes_out, dropdown_cuadrantes, visor_cuadrante_out,
-                checkbox_cuadrantes, json_out, state_manifiesto_1
+                checkbox_cuadrantes, json_out, state_manifiesto_1,
+                btn_paso2
             ]
         )
 
@@ -1048,7 +1145,8 @@ def build_ui():
             inputs=[checkbox_cuadrantes, state_manifiesto_1, state_manifiesto_2],
             outputs=[
                 diagnostico_out, json_out, galeria_cuadrantes_out, state_manifiesto_1, state_manifiesto_2,
-                raw_ocr_out, json_inspector, image_inspector, dropdown_inspector, json_auditoria_nemotron
+                raw_ocr_out, json_inspector, image_inspector, dropdown_inspector, json_auditoria_nemotron,
+                btn_paso3
             ]
         )
 
@@ -1067,7 +1165,7 @@ def build_ui():
         btn_paso3.click(
             fn=ejecutar_paso3_auditoria,
             inputs=[state_manifiesto_1, state_manifiesto_2],
-            outputs=[diagnostico_out, json_out, dropdown_audit, json_audit_inspector, state_manifiesto_3, json_auditoria_nemotron, html_metricas_out]
+            outputs=[diagnostico_out, json_out, dropdown_audit, json_audit_inspector, state_manifiesto_3, json_auditoria_nemotron, html_metricas_out, btn_metricas]
         )
 
         btn_metricas.click(
@@ -1081,7 +1179,7 @@ def build_ui():
 
 def main():
     print("=" * 60)
-    print("🚀 Servidor Principal Multi-Agente (v75) - Tiro con Arco")
+    print("🚀 Servidor Principal Multi-Agente (v76 - Enrutador Navegable) - Tiro con Arco")
     print("🌍 Abre tu navegador en: http://localhost:7860")
     print("=" * 60)
     demo = build_ui()
