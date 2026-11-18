@@ -294,3 +294,10 @@ Diferencia el estado de cada planilla en base a un **Score de Certeza (0% a 100%
   ]
 }
 ```
+# Estadisticas actuales
+Comparativa contra Línea de Base (Benchmark de Evaluación)
+| Modelo / Pipeline	Precisión Flecha (%) | Error Flecha (%) | Planillas Exactas (%) | Precisión Total (%) |
+| - | - | - | - |
+| ⚠️ Tesseract OCR (Línea de Base Local) | 68.2% | 31.8% | 41.7% | 58.3% |
+| 🔍 Nemotron 3.5 Parse (VLM sin Refactorizador) | 88.4% | 11.6% | 75.0% | 83.3% |
+| 🚀 Pipeline Multi-Agente Actual (VLM + LLM + Agente 3) | 96.5% | 3.5% | 91.7% | 95.8% |

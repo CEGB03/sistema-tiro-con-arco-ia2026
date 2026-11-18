@@ -731,10 +731,9 @@ def calcular_metricas_evaluacion(manifiesto_3, csv_path=None):
 
         agente3_advs = item.get("advertencias", []) + item.get("errores", [])
         for a_adv in agente3_advs:
-            if "≠" in a_adv or "discrepancia" in a_adv.lower() or "deducida" in a_adv.lower() or "reconciliada" in a_adv.lower() or "no detectado" in a_adv.lower():
-                clean_adv = a_adv.replace("💡 ", "").replace("⚠️ ", "").replace("ℹ️ ", "")
-                if not any(clean_adv in e for e in errores_especificos):
-                    errores_especificos.append(f"⚖️ {clean_adv}")
+            clean_adv = a_adv.strip()
+            if clean_adv and not any(clean_adv in e for e in errores_especificos):
+                errores_especificos.append(f"⚖️ {clean_adv}")
 
         if errores_especificos or estado_aud != "APROBADO_AUTOMATICO" or score_certeza < 90.0:
             detalles_errores_planillas.append({
@@ -902,14 +901,14 @@ def build_ui():
     .tab-nav button { font-weight: bold; font-size: 14px; padding: 10px 16px; }
     """
 
-    with gr.Blocks(title="🎯 Sistema Multi-Agente - Tiro con Arco (v77)", css=custom_css) as demo:
+    with gr.Blocks(title="🎯 Sistema Multi-Agente - Tiro con Arco (v78)", css=custom_css) as demo:
         with gr.Row(elem_id="header-bar", variant="compact"):
             with gr.Column(scale=3):
                 gr.HTML("""
                 <div style="display:flex; align-items:center; gap:12px; padding:8px 0;">
                     <div style="background:#0284c7; padding:10px; border-radius:10px; font-size:24px;">🎯</div>
                     <div>
-                        <h1 class="app-title">🎯 Sistema Multi-Agente - Tiro con Arco (v77)</h1>
+                        <h1 class="app-title">🎯 Sistema Multi-Agente - Tiro con Arco (v78)</h1>
                         <p class="app-subtitle">Navegación Modular Autoescalable • Segmentación, OCR Vision-Language y Auditoría Lógica en Vivo</p>
                     </div>
                 </div>
@@ -967,7 +966,7 @@ def build_ui():
             with gr.Tab("✂️ Paso 1: Segmentación", id="tab_paso1"):
                 with gr.Row():
                     with gr.Column(scale=1):
-                        diagnostico_out = gr.Markdown("Ejecuta el **Paso 0** y luego haz clic en **Paso 1: Dividir Cuadrantes**.")
+                        diagnostico_paso1_out = gr.Markdown("Ejecuta el **Paso 0** y luego haz clic en **Paso 1: Dividir Cuadrantes**.")
                         
                         gr.Markdown("---")
                         gr.Markdown("### 🛠️ Inspección y Mejora de Recortes")
@@ -997,6 +996,7 @@ def build_ui():
                         gr.Markdown("### 👁️ Extracción de Texto con VLM / Nemotron")
                         gr.Markdown("Procesa los cuadrantes seleccionados utilizando el modelo multimodal con rate-limiting y fallback local.")
                         
+                        diagnostico_paso2_out = gr.Markdown("Selecciona cuadrantes en el Paso 1 y haz clic en **Paso 2: Ejecutar OCR**.")
                         dropdown_inspector = gr.Dropdown(choices=[], label="🔍 Seleccionar Arquero/Cuadrante para Inspeccionar Crudo")
                         image_inspector = gr.Image(label="🖼️ Recorte Interactivo", interactive=False)
                         
@@ -1022,6 +1022,7 @@ def build_ui():
                         btn_metricas = gr.Button("📊 Ir a Métricas y Evaluación ➔", variant="primary", interactive=False)
 
                     with gr.Column(scale=2):
+                        diagnostico_paso3_out = gr.Markdown("Ejecuta el Paso 2 y haz clic en **Paso 3: Ejecutar Auditoría Lógica**.")
                         json_audit_inspector = gr.Code(label="📋 Detalle Completo de Auditoría Agente 3", language="json")
 
             # ==========================================
@@ -1048,7 +1049,7 @@ def build_ui():
             fn=cargar_documento_paso0,
             inputs=[file_input],
             outputs=[
-                status_paso0, galeria_paginas_out, dropdown_paginas, visor_pagina_out, diagnostico_out,
+                status_paso0, galeria_paginas_out, dropdown_paginas, visor_pagina_out, diagnostico_paso1_out,
                 galeria_cuadrantes_out, dropdown_cuadrantes, visor_cuadrante_out,
                 checkbox_cuadrantes, json_out,
                 btn_paso1, btn_paso2, btn_paso3, btn_metricas
@@ -1089,7 +1090,7 @@ def build_ui():
             fn=ejecutar_paso1_segmentacion,
             inputs=[file_input, tipo_manual],
             outputs=[
-                diagnostico_out, galeria_cuadrantes_out, dropdown_cuadrantes, visor_cuadrante_out,
+                diagnostico_paso1_out, galeria_cuadrantes_out, dropdown_cuadrantes, visor_cuadrante_out,
                 checkbox_cuadrantes, json_out, state_manifiesto_1,
                 btn_paso1, btn_paso2, tabs_main
             ]
@@ -1129,7 +1130,7 @@ def build_ui():
             fn=ejecutar_paso2_ocr,
             inputs=[checkbox_cuadrantes, state_manifiesto_1, state_manifiesto_2],
             outputs=[
-                diagnostico_out, json_out, galeria_cuadrantes_out, state_manifiesto_1, state_manifiesto_2,
+                diagnostico_paso2_out, json_out, galeria_cuadrantes_out, state_manifiesto_1, state_manifiesto_2,
                 raw_ocr_out, json_inspector, image_inspector, dropdown_inspector, json_auditoria_nemotron,
                 btn_paso2, btn_paso3, tabs_main
             ]
@@ -1151,7 +1152,7 @@ def build_ui():
             fn=ejecutar_paso3_auditoria,
             inputs=[state_manifiesto_1, state_manifiesto_2],
             outputs=[
-                diagnostico_out, json_out, dropdown_audit, json_audit_inspector, state_manifiesto_3,
+                diagnostico_paso3_out, json_out, dropdown_audit, json_audit_inspector, state_manifiesto_3,
                 json_auditoria_nemotron, html_metricas_out,
                 btn_paso3, btn_metricas, tabs_main
             ]
@@ -1168,7 +1169,7 @@ def build_ui():
 
 def main():
     print("=" * 60)
-    print("🚀 Servidor Principal Multi-Agente (v77) - Tiro con Arco")
+    print("🚀 Servidor Principal Multi-Agente (v78) - Tiro con Arco")
     print("🌍 Abre tu navegador en: http://localhost:7860")
     print("=" * 60)
     demo = build_ui()
