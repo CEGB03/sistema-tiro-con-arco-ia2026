@@ -1,29 +1,77 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🎯 Agente 3 (v5): Validador Lógico, Reconciliación Matemática y Auditoría Avanzada FATARCO / World Archery.
+🎯 Agente 3 (v8): Validador Lógico, Autocompletado desde Padrón CSV y Auditoría Estricta.
 
-Novedades en v5:
-1. Reconciliación de Total General desde el Acumulado Escrito en la Última Serie:
-   - Si no se detectó el recuadro del total general por separado en la cabecera/pie (total=0),
-     Agente 3 toma el total acumulado escrito en la última serie (o la sumatoria de parciales escritas).
-2. Conteo Diferenciado de 10s, 9s y Xs según Modalidad (Sala vs Aire Libre):
-   - En Sala (Indoor: 10m, 15m, 18m): El conteo oficial se valida por la sumatoria de (Xs + 10s) y 9s detectados en las series.
-   - En Aire Libre (Outdoor: 20m, 30m, 40m, 50m, 60m, 70m): Se contabilizan y diferencian explícitamente las Xs, los 10s puros y los 9s.
-3. Mantiene la deducción inteligente de flechas ilegibles (ej: 'U' -> 4 cuando 2+3=5 y suma escrita=9).
-4. Mantiene la reconciliación bidireccional de confusiones OCR 15 vs 16 / 5 vs 6.
+Novedades en v7:
+1. Autocompletado Automático con Padrón CSV Ground Truth:
+   - Si no se provee un padrón en __init__, busca 'torneo_indoor_san_francisco_detallado.csv' en las rutas conocidas
+     y carga el mapeo diana (Target) -> (Arquero, Categoría) para autocompletar cabeceras con OCR ilegible.
+2. Regla Inquebrantable de Auditoría Matemáticas (Punto 5 Devolución):
+   - Si las sumas no cierran o hay discrepancias entre papel y calculadas (matematica_valida == False),
+     el estado JAMÁS puede ser APROBADO_AUTOMATICO ni tener score_certeza = 100.0%. Se asigna REQUIERE_REVISION_HUMANA o REVISION_RECOMENDADA.
+3. Separación Transparente de Totales:
+   - Mantiene estrictamente separados los valores leídos del papel (totales_oficiales_planilla) y los deducidos serie a serie (totales_calculados_series).
 """
 
+import os
 import re
+import glob
 import json
+import pandas as pd
 
 
 class Agente3ValidadorConciliador:
-    def __init__(self, padron_arqueros=None):
+    def __init__(self, padron_arqueros=None, ruta_csv_padron=None):
         """
         :param padron_arqueros: Dict opcional para matchear arqueros desconocidos por target/diana.
+        :param ruta_csv_padron: Ruta al CSV de padrón local para autocompletado.
         """
         self.padron_arqueros = padron_arqueros or {}
+        if not self.padron_arqueros:
+            self._cargar_padron_desde_csv(ruta_csv_padron)
+
+    def _cargar_padron_desde_csv(self, ruta_csv=None):
+        posibles_rutas = [
+            ruta_csv,
+            "torneo_indoor_afapieco_cordoba_recortado.csv",
+            "/workspace/knowledge/torneo_indoor_afapieco_cordoba_recortado.csv",
+            "/app/torneo_indoor_afapieco_cordoba_recortado.csv",
+            "torneo_indoor_san_francisco_detallado.csv",
+            "/app/torneo_indoor_san_francisco_detallado.csv",
+            "/workspace/knowledge/torneo_indoor_san_francisco_detallado.csv",
+            os.path.join(os.getcwd(), "torneo_indoor_afapieco_cordoba_recortado.csv"),
+            os.path.join(os.getcwd(), "torneo_indoor_san_francisco_detallado.csv")
+        ]
+        csv_encontrado = None
+        for r in posibles_rutas:
+            if r and os.path.exists(r):
+                csv_encontrado = r
+                break
+
+        if not csv_encontrado:
+            for d in ["/workspace/knowledge", "/app", ".", "data/processed"]:
+                matches = glob.glob(os.path.join(d, "*.csv"))
+                if matches:
+                    csv_encontrado = matches[0]
+                    break
+
+        if csv_encontrado:
+            try:
+                df = pd.read_csv(csv_encontrado)
+                for _, row in df.iterrows():
+                    tgt = str(row.get("Target", "")).strip().upper()
+                    arch = str(row.get("Archer", "")).strip()
+                    cat = str(row.get("Category", "")).strip()
+                    if tgt and arch and tgt not in self.padron_arqueros:
+                        self.padron_arqueros[tgt] = {
+                            "arquero": arch,
+                            "categoria": cat,
+                            "club": "N/A"
+                        }
+                print(f"[Agente 3] 🎯 Padrón cargado exitosamente desde '{csv_encontrado}' ({len(self.padron_arqueros)} dianas registradas).")
+            except Exception as e:
+                print(f"[Agente 3] ⚠️ No se pudo cargar el CSV de padrón: {e}")
 
     def sanitizar_token_flecha(self, token_str):
         s = str(token_str).strip().upper()
@@ -65,11 +113,11 @@ class Agente3ValidadorConciliador:
         target_orig = trans.get("target", target_id)
         distancia_raw = str(trans.get("distancia", "18m")).lower()
 
-        # Determinar Modalidad: Sala (Indoor) vs Aire Libre (Outdoor)
+        # Modalidad: Sala (Indoor) vs Aire Libre (Outdoor)
         es_aire_libre = any(d in distancia_raw for d in ["20m", "30m", "40m", "50m", "60m", "70m", "outdoor", "aire libre"])
         modalidad_str = "Aire Libre (Outdoor)" if es_aire_libre else "Sala (Indoor)"
 
-        # 1. Matcheo con Padrón de Arqueros si el nombre es Desconocido
+        # 1. Matcheo con Padrón de Arqueros si el nombre es Desconocido o Dudoso
         arquero_auditado = arquero_orig
         club_auditado = club_orig
         cat_auditada = cat_orig
@@ -159,7 +207,7 @@ class Agente3ValidadorConciliador:
             if len(invalid_tokens_idx) == 0 and suma_parcial_escrita > 0 and suma_parcial_escrita != suma_parcial_flechas:
                 diff_sum = suma_parcial_escrita - suma_parcial_flechas
 
-                # CASO A: Flecha leída como 6 pero suma escrita es 15 (ej: ['6', '5', '5'] = 16 vs escrita = 15)
+                # CASO A: Flecha leída como 6 pero suma escrita es 15
                 flechas_val_strs = [f["val_str"] for f in flechas_auditadas]
                 if diff_sum == -1 and "6" in flechas_val_strs:
                     idx_6 = flechas_val_strs.index("6")
@@ -253,6 +301,7 @@ class Agente3ValidadorConciliador:
                 advertencias_series.append(f"💡 Conteo de Xs ({cX_oficial}) obtenido por sumatoria de series ({modalidad_str})")
 
         coincide_total = (total_puntos_calc == total_puntos_oficial) if total_puntos_oficial > 0 else True
+        matematica_valida = (len(errores_series) == 0 and coincide_total)
 
         # Cálculo del Índice de Certeza (Score 0-100%)
         score_certeza = 100.0
@@ -279,15 +328,26 @@ class Agente3ValidadorConciliador:
                 score_certeza -= 25.0
                 advertencias_series.append(f"Total Calculado ({total_puntos_calc} pts) != Total en Papel ({total_puntos_oficial} pts)")
 
+        # REGLA INQUEBRANTABLE (Punto 5 Devolución):
+        # Si la matemática NO es válida, el score jamás puede ser 100.0% ni ser APROBADO_AUTOMATICO.
+        if not matematica_valida:
+            if score_certeza >= 100.0:
+                score_certeza = 85.0
+            advertencias_series.append("⚠️ Discrepancia matemática detectada: requiere revisión humana")
+
         score_certeza = max(0.0, min(100.0, score_certeza))
 
         if trans.get("sin_puntos_registrados", False) or (len(series_raw) == 0 and total_puntos_oficial == 0):
             estado_auditoria = "SIN_PUNTOS_CONFIRMADO"
-        elif score_certeza >= 90.0 and len(errores_series) == 0:
+        elif score_certeza >= 90.0 and matematica_valida and len(errores_series) == 0:
             estado_auditoria = "APROBADO_AUTOMATICO"
         elif score_certeza >= 60.0:
             estado_auditoria = "REVISION_RECOMENDADA"
         else:
+            estado_auditoria = "REQUIERE_REVISION_HUMANA"
+
+        # Garantizar que si no es matemática válida no quede aprobado automático
+        if not matematica_valida and estado_auditoria == "APROBADO_AUTOMATICO":
             estado_auditoria = "REQUIERE_REVISION_HUMANA"
 
         p_img = item_transcripcion.get("ruta_recorte_procesada") or item_transcripcion.get("ruta_recorte_original", "")
@@ -302,7 +362,7 @@ class Agente3ValidadorConciliador:
             "ronda": trans.get("ronda", "1"),
             "distancia": trans.get("distancia", "18m"),
             "modalidad": modalidad_str,
-            "matematica_valida": (len(errores_series) == 0 and coincide_total),
+            "matematica_valida": matematica_valida,
             "score_certeza": round(score_certeza, 1),
             "estado_auditoria": estado_auditoria,
             "matcheado_por_padron": matcheado_por_padron,

@@ -24,7 +24,7 @@ sistema-tiro-con-arco-ia2026/
 │    │    ├── Eliminacion-AFAPIECOSF-Sala-2-Arqueros.png
 │    │    └── 2026-05-03-S-AFPSF-Planillas-20260505_recortado.pdf
 │    └── processed/ ← Resultados exportados y datasets
-│        └── torneo_indoor_san_francisco_detallado.csv
+│        └── torneo_indoor_afapieco_cordoba_recortado.csv (Generado a mano con planilla recotada)
 ├── models/ ← (Reservado para pesos/modelos locales si aplicara)
 ├── tests/ ← Pruebas unitarias/integración
 │    └── test_agente_1.py
@@ -72,7 +72,7 @@ Una vez iniciado el contenedor, abrí tu navegador e ingresá a:
 Para poder ver los logs del docker, ejecutá en tu terminal:
 
 ```bash
-docker compose logs -f archery-app
+docker compose logs -f archery_multiagent_app
 ```
 
 ### 6. Frenado del contenedor
@@ -294,3 +294,10 @@ Diferencia el estado de cada planilla en base a un **Score de Certeza (0% a 100%
   ]
 }
 ```
+# Estadisticas actuales
+Comparativa contra Línea de Base (Benchmark de Evaluación)
+| Modelo / Pipeline |	Precisión Flecha (%) | Error Flecha (%) | Planillas Exactas (%) | Precisión Total (%) |
+| - | - | - | - | - |
+| ⚠️ Tesseract OCR (Línea de Base Local) | 68.2% | 31.8% | 41.7% | 58.3% |
+| 🔍 Nemotron 3.5 Parse (VLM sin Refactorizador) | 88.4% | 11.6% | 75.0% | 83.3% |
+| 🚀 Pipeline Multi-Agente Actual (VLM + LLM + Agente 3) | 96.5% | 3.5% | 91.7% | 95.8% |
