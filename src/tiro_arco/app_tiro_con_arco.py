@@ -34,12 +34,15 @@ def _generar_thumb_html(ruta_img, max_dim=140):
         return "📷"
     try:
         img = Image.open(ruta_img).convert("RGB")
+        
+        # Generar miniatura optimizada
         img_thumb = img.copy()
         img_thumb.thumbnail((max_dim, max_dim))
         buf_thumb = BytesIO()
         img_thumb.save(buf_thumb, format="JPEG", quality=75)
         b64_thumb = base64.b64encode(buf_thumb.getvalue()).decode("utf-8")
 
+        # Generar versión en alta resolución para apertura directa en pestaña nueva
         img_full = img.copy()
         if max(img_full.size) > 1600:
             img_full.thumbnail((1600, 1600))
@@ -199,7 +202,9 @@ def ejecutar_paso1_segmentacion(archivo_input, tipo_manual):
             gr.CheckboxGroup(choices=[]),
             "{}",
             None,
-            gr.update(interactive=False) # btn_paso2
+            gr.update(interactive=True),  # btn_paso1 sigue interactivo si falló
+            gr.update(interactive=False), # btn_paso2
+            gr.Tabs(selected="tab_paso0")
         )
 
     ruta = archivo_input.name if archivo_input else "documento.pdf"
@@ -259,7 +264,9 @@ def ejecutar_paso1_segmentacion(archivo_input, tipo_manual):
         gr.CheckboxGroup(choices=opciones_checkbox, value=seleccionados_defecto, label="Seleccionar Cuadrantes Organizados por Página (Paso 2)"),
         json_str,
         manifiesto_1,
-        gr.update(interactive=True) # Activa Paso 2
+        gr.update(interactive=False), # Desactiva btn_paso1 (ya ejecutado)
+        gr.update(interactive=True),  # Activa btn_paso2
+        gr.Tabs(selected="tab_paso1") # REDIRIGE A LA PESTAÑA PASO 1
     )
 
 
@@ -330,10 +337,10 @@ def ejecutar_paso2_ocr(seleccionados, manifiesto_1, manifiesto_2_previo):
     empty_audit_json = json.dumps({"info": "Haz clic en Paso 3 abajo para auditar los resultados."}, indent=2, ensure_ascii=False)
 
     if not manifiesto_1:
-        return "⚠️ Primero debes ejecutar el Paso 1 (Segmentación).", "{}", [], gr.CheckboxGroup(choices=[]), manifiesto_1, None, None, "", "{}", None, gr.Dropdown(choices=[]), gr.Dropdown(choices=[]), empty_audit_json, gr.update(interactive=False)
+        return "⚠️ Primero debes ejecutar el Paso 1 (Segmentación).", "{}", [], gr.CheckboxGroup(choices=[]), manifiesto_1, None, None, "", "{}", None, gr.Dropdown(choices=[]), gr.Dropdown(choices=[]), empty_audit_json, gr.update(interactive=True), gr.update(interactive=False), gr.Tabs(selected="tab_paso1")
 
     if not seleccionados:
-        return "⚠️ Por favor selecciona al menos un cuadrante para realizar el OCR.", "{}", [], gr.CheckboxGroup(choices=[]), manifiesto_1, manifiesto_2_previo, None, "", "{}", None, gr.Dropdown(choices=[]), gr.Dropdown(choices=[]), empty_audit_json, gr.update(interactive=False)
+        return "⚠️ Por favor selecciona al menos un cuadrante para realizar el OCR.", "{}", [], gr.CheckboxGroup(choices=[]), manifiesto_1, manifiesto_2_previo, None, "", "{}", None, gr.Dropdown(choices=[]), gr.Dropdown(choices=[]), empty_audit_json, gr.update(interactive=True), gr.update(interactive=False), gr.Tabs(selected="tab_paso1")
 
     print(f"[UI] 👁️ Ejecutando Paso 2 (OCR) para {len(seleccionados)} cuadrante(s): {seleccionados}")
 
@@ -440,7 +447,9 @@ def ejecutar_paso2_ocr(seleccionados, manifiesto_1, manifiesto_2_previo):
         img_init,
         gr.Dropdown(choices=choices_inspector, value=primer_insp_key, label="🔍 Seleccionar Arquero/Cuadrante para Inspeccionar Salida en Crudo"),
         str_aud_json,
-        gr.update(interactive=True) # Activa Paso 3
+        gr.update(interactive=False), # Desactiva btn_paso2 (ya ejecutado)
+        gr.update(interactive=True),  # Activa btn_paso3
+        gr.Tabs(selected="tab_paso2") # REDIRIGE A LA PESTAÑA PASO 2
     )
 
 
@@ -468,7 +477,7 @@ def inspeccionar_recorte(opcion_seleccionada, manifiesto_2):
 def ejecutar_paso3_auditoria(manifiesto_1, manifiesto_2):
     if not manifiesto_2:
         empty_audit_json = json.dumps({"info": "Primero debes ejecutar el Paso 2 (OCR)."}, indent=2, ensure_ascii=False)
-        return "⚠️ Primero debes ejecutar el Paso 2 (OCR).", "{}", gr.Dropdown(choices=[]), empty_audit_json, None, "{}", "<div style='padding:15px; background:#fff3cd;'>⚠️ Ejecuta el Paso 2 antes de auditar.</div>", gr.update(interactive=False)
+        return "⚠️ Primero debes ejecutar el Paso 2 (OCR).", "{}", gr.Dropdown(choices=[]), empty_audit_json, None, "{}", "<div style='padding:15px; background:#fff3cd;'>⚠️ Ejecuta el Paso 2 antes de auditar.</div>", gr.update(interactive=True), gr.update(interactive=False), gr.Tabs(selected="tab_paso2")
 
     print(f"[UI] ⚖️ Ejecutando Paso 3 (Agente 3 - Auditoría Lógica y Reconciliación)...")
     manifiesto_3 = agente3.auditar_manifiesto_completo(manifiesto_2)
@@ -553,7 +562,9 @@ def ejecutar_paso3_auditoria(manifiesto_1, manifiesto_2):
         manifiesto_3,
         str_aud_json,
         html_metricas,
-        gr.update(interactive=True) # Activa Métricas
+        gr.update(interactive=False), # Desactiva btn_paso3 (ya ejecutado)
+        gr.update(interactive=True),  # Activa btn_metricas
+        gr.Tabs(selected="tab_paso3") # REDIRIGE A LA PESTAÑA PASO 3
     )
 
 
@@ -573,13 +584,22 @@ def inspeccionar_auditoria(opcion_seleccionada, manifiesto_3):
     return json.dumps({"info": "⚠️ Detalle de auditoría no encontrado."}, indent=2, ensure_ascii=False)
 
 
+def ir_a_metricas_ui(manifiesto_3):
+    html_out = calcular_metricas_evaluacion(manifiesto_3)
+    return (
+        html_out,
+        gr.update(interactive=False), # Desactiva btn_metricas (ya visto)
+        gr.Tabs(selected="tab_metricas") # REDIRIGE A LA PESTAÑA MÉTRICAS
+    )
+
+
 # --- CÁLCULO DE MÉTRICAS DE EFICACIA Y ERROR (CORRECCIÓN #1 DEL PROFESOR) ---
 def calcular_metricas_evaluacion(manifiesto_3, csv_path=None):
     if not manifiesto_3 or not isinstance(manifiesto_3, dict):
         return """
         <div style="background-color: #0f172a; color: #94a3b8; padding: 20px; border-radius: 10px; border: 1px solid #334155;">
             <h4 style="color: #38bdf8; margin-top: 0;">📊 Evaluación del MVP contra Verdad Terreno</h4>
-            <p>Ejecuta el <b>Paso 3 (Auditoría Lógica)</b> para calcular las métricas contra la Verdad Terreno y generar el registro detallado de errores.</p>
+            <p>Ejecuta el <b>Paso 3 (Auditoría Lógica)</b> para calcular la precisión del modelo y generar el registro detallado de errores.</p>
         </div>
         """
 
@@ -873,67 +893,32 @@ def calcular_metricas_evaluacion(manifiesto_3, csv_path=None):
     return html
 
 
-# --- CONSTRUCCIÓN DE LA INTERFAZ WEB GRADIO CON ENRUTADOR NAVEGABLE Y NIVELES ANIDADOS ---
+
+# --- CONSTRUCCIÓN DE LA INTERFAZ WEB GRADIO ---
 def build_ui():
     custom_css = """
-    /* Header / Navbar Superior Estilo App Profesional */
-    .app-header {
-        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-        border-bottom: 2px solid #3b82f6;
-        padding: 16px 24px;
-        margin-bottom: 16px;
-        border-radius: 12px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-    }
-    .app-title {
-        color: #38bdf8;
-        font-size: 24px;
-        font-weight: 800;
-        margin: 0;
-        letter-spacing: -0.5px;
-    }
-    .app-subtitle {
-        color: #94a3b8;
-        font-size: 13px;
-        margin-top: 4px;
-    }
-    /* Estilizado de Tabs / Enrutador Secciones Responsivo */
-    .gr-tabs {
-        border-radius: 10px;
-        overflow: hidden;
-    }
-    .tab-nav button {
-        font-size: 14px !important;
-        font-weight: 600 !important;
-        padding: 10px 18px !important;
-    }
-    .step-box {
-        background: #1e293b;
-        border: 1px solid #334155;
-        border-radius: 12px;
-        padding: 20px;
-        margin-bottom: 16px;
-    }
-    .step-header {
-        border-bottom: 1px solid #334155;
-        padding-bottom: 10px;
-        margin-bottom: 16px;
-    }
+    .app-title { font-size: 24px; font-weight: 800; color: #38bdf8; margin: 0; }
+    .app-subtitle { font-size: 13px; color: #94a3b8; margin: 2px 0 0 0; }
+    .tab-nav button { font-weight: bold; font-size: 14px; padding: 10px 16px; }
     """
 
-    with gr.Blocks(title="🎯 Sistema Multi-Agente - Tiro con Arco (v76)", css=custom_css) as demo:
-        with gr.Row(elem_classes=["app-header"]):
-            with gr.Column():
+    with gr.Blocks(title="🎯 Sistema Multi-Agente - Tiro con Arco (v77)", css=custom_css) as demo:
+        with gr.Row(elem_id="header-bar", variant="compact"):
+            with gr.Column(scale=3):
                 gr.HTML("""
-                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                <div style="display:flex; align-items:center; gap:12px; padding:8px 0;">
+                    <div style="background:#0284c7; padding:10px; border-radius:10px; font-size:24px;">🎯</div>
                     <div>
-                        <h1 class="app-title">🎯 Sistema Multi-Agente - Tiro con Arco (v76)</h1>
+                        <h1 class="app-title">🎯 Sistema Multi-Agente - Tiro con Arco (v77)</h1>
                         <p class="app-subtitle">Navegación Modular Autoescalable • Segmentación, OCR Vision-Language y Auditoría Lógica en Vivo</p>
                     </div>
-                    <div style="background:#1e293b; padding:8px 16px; border-radius:8px; border:1px solid #3b82f6;">
-                        <span style="color:#60a5fa; font-size:12px; font-weight:bold;">ESTADO PIPELINE:</span>
-                        <span style="color:#34d399; font-size:12px; margin-left:6px; font-weight:bold;">🟢 AGENTES LISTOS</span>
-                    </div>
+                </div>
+                """)
+            with gr.Column(scale=1):
+                gr.HTML("""
+                <div style="background:#1e293b; padding:8px 16px; border-radius:8px; border:1px solid #3b82f6; text-align:right;">
+                    <span style="color:#60a5fa; font-size:12px; font-weight:bold;">ESTADO PIPELINE:</span>
+                    <span style="color:#34d399; font-size:12px; margin-left:6px; font-weight:bold;">🟢 AGENTES LISTOS</span>
                 </div>
                 """)
 
@@ -1058,7 +1043,7 @@ def build_ui():
             with gr.Tab("📄 Manifiesto JSON Global", id="tab_json"):
                 json_out = gr.Code(label="Manifiesto JSON Completo (Agente 1 + Agente 2 + Agente 3)", language="json")
 
-        # --- EVENTOS Y CONTROL DE ESTADOS DE BOTONES ---
+        # --- EVENTOS Y CONTROL DE ESTADOS DE BOTONES Y REDIRECCIÓN DE PESTAÑAS ---
         btn_cargar.click(
             fn=cargar_documento_paso0,
             inputs=[file_input],
@@ -1106,7 +1091,7 @@ def build_ui():
             outputs=[
                 diagnostico_out, galeria_cuadrantes_out, dropdown_cuadrantes, visor_cuadrante_out,
                 checkbox_cuadrantes, json_out, state_manifiesto_1,
-                btn_paso2
+                btn_paso1, btn_paso2, tabs_main
             ]
         )
 
@@ -1146,7 +1131,7 @@ def build_ui():
             outputs=[
                 diagnostico_out, json_out, galeria_cuadrantes_out, state_manifiesto_1, state_manifiesto_2,
                 raw_ocr_out, json_inspector, image_inspector, dropdown_inspector, json_auditoria_nemotron,
-                btn_paso3
+                btn_paso2, btn_paso3, tabs_main
             ]
         )
 
@@ -1165,13 +1150,17 @@ def build_ui():
         btn_paso3.click(
             fn=ejecutar_paso3_auditoria,
             inputs=[state_manifiesto_1, state_manifiesto_2],
-            outputs=[diagnostico_out, json_out, dropdown_audit, json_audit_inspector, state_manifiesto_3, json_auditoria_nemotron, html_metricas_out, btn_metricas]
+            outputs=[
+                diagnostico_out, json_out, dropdown_audit, json_audit_inspector, state_manifiesto_3,
+                json_auditoria_nemotron, html_metricas_out,
+                btn_paso3, btn_metricas, tabs_main
+            ]
         )
 
         btn_metricas.click(
-            fn=calcular_metricas_evaluacion,
+            fn=ir_a_metricas_ui,
             inputs=[state_manifiesto_3],
-            outputs=[html_metricas_out]
+            outputs=[html_metricas_out, btn_metricas, tabs_main]
         )
 
     return demo
@@ -1179,7 +1168,7 @@ def build_ui():
 
 def main():
     print("=" * 60)
-    print("🚀 Servidor Principal Multi-Agente (v76 - Enrutador Navegable) - Tiro con Arco")
+    print("🚀 Servidor Principal Multi-Agente (v77) - Tiro con Arco")
     print("🌍 Abre tu navegador en: http://localhost:7860")
     print("=" * 60)
     demo = build_ui()
