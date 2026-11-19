@@ -329,7 +329,7 @@ class Agente3ValidadorConciliador:
                 score_certeza -= 25.0
                 advertencias_series.append(f"Total Calculado ({total_puntos_calc} pts) != Total en Papel ({total_puntos_oficial} pts)")
 
-        # REGLA INQUEBRANTABLE:
+        # REGLA INQUEBRANTABLE (Punto 5 Devolución):
         # Si la matemática NO es válida, el score jamás puede ser 100.0% ni ser APROBADO_AUTOMATICO.
         if not matematica_valida:
             if score_certeza >= 100.0:

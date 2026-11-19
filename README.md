@@ -234,8 +234,7 @@ Una vez iniciado el contenedor, abrí tu navegador e ingresá a:
 Para poder ver los logs del docker, ejecutá en tu terminal:
 
 ```bash
-docker compose logs -f archery-app
-
+docker compose logs -f archery_multiagent_app
 ```
 
 ### 6. Frenado del contenedor
@@ -263,7 +262,125 @@ uv run tiro-con-arco
 
 ## 👤 Autoría y Derechos
 
-* **Proyecto Capstone:** Inteligencia Artificial (2026).
-* **Autor:** Carlos Emanuel Gomez Bonelli.
-* **Carrera:** Ingenieria en Informatica (2026).
-* **Licencia:** MIT License.
+### 🎨 1. Pipeline de Preprocesamiento (OpenCV)
+- **Realce (CLAHE):** Resalta la tinta manuscrita frente a las sombras del escaneo.
+- **Filtro Bilateral:** Elimina el ruido del papel sin difuminar los números.
+- **Detección de Tabla Vacía:** Si el recorte no tiene suficiente tinta (ratio < 0.0003), se salta el OCR automáticamente y se marca como `sin_puntos_registrados`.
+
+### 🧠 2. Diferenciación y Cadena de Resiliencia (Fallback)
+El Agente 2 diferencia entre recortes de planillas reales y hojas de información.
+- **Si `es_pagina_informacion` es True:** Omite el OCR inmediatamente (ahorra cuota y tiempo) y devuelve un JSON marcado como `Descartado (Sin OCR)`.
+- **Si es una planilla real:** Intenta secuencialmente:
+  1. **NVIDIA Nemotron Parse (API):** Usa el endpoint `/retrieval/nvidia/nemotron-3.5-parse/parse`. Extrae la tabla en formato LaTeX.
+  2. **Refactorización Secundaria (LLM):** Si el LaTeX de Nemotron es complejo, invoca a `meta/llama-3.1-70b-instruct` para forzar la conversión a un JSON perfecto.
+  3. **Ollama Local (Fallback):** Modelos como `qwen2.5-vl` o `deepseek-ocr`.
+  4. **Tesseract OCR:** Como último recurso de texto tradicional.
+
+*Nota:* El agente genera automáticamente un archivo de auditoría (`auditoria_nemotron_raw_vs_refactorizado.json`) comparando el texto en crudo contra el JSON final.
+
+### 📄 Salida (Manifiesto JSON)
+```json
+{
+  "archivo_origen": "planillas_torneo.pdf",
+  "transcripciones": [
+    {
+      "pagina": 1,
+      "target_id": "Portada",
+      "tipo_juego": "informacion",
+      "transcripcion": {
+        "arquero": "N/A (Hoja Informativa)",
+        "sin_puntos_registrados": true,
+        "observacion": "Hoja de Información / Portada (Descartada)",
+        "series": [],
+        "modelo_usado": "Descartado (Sin OCR)"
+      }
+    },
+    {
+      "pagina": 2,
+      "target_id": "A",
+      "tipo_juego": "clasificacion",
+      "transcripcion": {
+        "valido": true,
+        "arquero": "Leguiza Marcelo Gabriel",
+        "target": "1A",
+        "club": "TCAP",
+        "categoria": "R M",
+        "sin_puntos_registrados": false,
+        "series": [
+          {"serie": 1, "flechas": ["10", "9", "8"], "suma_parcial_escrita": 27}
+        ],
+        "totales_planilla": {"total_puntos": 247, "cant_10s": 4, "cant_9s": 6},
+        "modelo_usado": "nvidia:nemotron-3.5-parse + llm-refactorer:llama-3.1-70b"
+      }
+    }
+  ]
+}
+```
+
+---
+
+## 🤖 Agente 3: Validador Lógico y Reconciliador Matemático (v5)
+**Objetivo:** Recibir el JSON crudo del Agente 2, limpiar el ruido del OCR, verificar que las matemáticas cierren y deducir números ilegibles basándose en el contexto y las reglas de tiro con arco.
+
+### 🧹 1. Sanitización y Deducción
+- **Ruido OCR:** Corrige lecturas típicas como `"6X"` -> `6`, o `"104"` -> `10`.
+- **Deducción de Flechas Ilegibles:** Si la IA lee `[2, 3, 'U']` y la suma escrita en el papel es `9`, el Agente 3 deduce automáticamente que `'U'` es un `4`.
+- **Confusión 15 vs 16:** Si detecta una flecha leída como 6 pero el total escrito de la serie es 15, asume que el OCR leyó mal y corrige la flecha a 5.
+
+### 📐 2. Reconciliación Matemática y Modalidad
+- **Validación Serie por Serie y Totales:** Compara la suma de las flechas contra la suma parcial escrita y contra el total del pie de página.
+- **Lógica de Sala vs Aire Libre:** En Sala (Indoor), agrupa el conteo de `10s` como `(X + 10)`. En Aire Libre (Outdoor), diferencia los `10s` puros de las `Xs`.
+- **Deducción de Totales Faltantes:** Si el recuadro del total general no fue leído por el OCR, el Agente 3 lo deduce a partir del total acumulado escrito en la última serie.
+
+### 📊 3. Índice de Certeza y Auditoría
+Diferencia el estado de cada planilla en base a un **Score de Certeza (0% a 100%)**:
+- `APROBADO_AUTOMATICO` (≥ 90% de certeza, todo cierra matemáticamente).
+- `REVISION_RECOMENDADA` / `REQUIERE_REVISION_HUMANA` (hay discrepancias en las sumas).
+- `SIN_PUNTOS_CONFIRMADO` (la planilla estaba vacía).
+
+### 📄 Salida (Informe de Auditoría JSON)
+```json
+{
+  "archivo_origen": "planillas_torneo.pdf",
+  "resumen_auditoria": {
+    "total_cuadrantes_procesados": 2,
+    "aprobados_automaticos": 1,
+    "requiere_revision_humana": 0,
+    "sin_puntos_confirmados": 1
+  },
+  "resultados_auditados": [
+    {
+      "pagina": 2,
+      "target_id": "A",
+      "arquero": "Leguiza Marcelo Gabriel",
+      "target": "1A",
+      "matematica_valida": true,
+      "score_certeza": 100.0,
+      "estado_auditoria": "APROBADO_AUTOMATICO",
+      "total_oficial_estado": "DEDUCIDO_ULTIMA_SERIE",
+      "totales_oficiales_planilla": {"total_puntos": 247, "cant_10s": 4, "cant_9s": 6, "cant_xs": 0},
+      "totales_calculados_series": {"total_puntos": 247, "cant_10s_totales": 4, "cant_10s_puras": 4, "cant_9s": 6},
+      "deducciones_realizadas": [
+        {
+          "serie": 4,
+          "original": "U",
+          "deducido": "4",
+          "diferencia_calculada": 4
+        }
+      ],
+      "errores": [],
+      "advertencias": [
+        "💡 Total en papel (247 pts) deducido del acumulado escrito en la última serie",
+        "💡 Serie 4: Flecha ilegible 'U' deducida automáticamente como '4' (Suma escrita 26 - parcial = 4)"
+      ]
+    }
+  ]
+}
+```
+# Estadisticas actuales
+Comparativa contra Línea de Base (Benchmark de Evaluación)
+| Modelo / Pipeline |	Precisión Flecha (%) | Error Flecha (%) | Planillas Exactas (%) | Precisión Total (%) |
+| - | - | - | - | - |
+| ⚠️ Tesseract OCR (Línea de Base Local) | 68.2% | 31.8% | 41.7% | 58.3% |
+| 🔍 Nemotron 3.5 Parse (VLM sin Refactorizador) | 88.4% | 11.6% | 75.0% | 83.3% |
+| 🚀 Pipeline Multi-Agente Actual (VLM + LLM + Agente 3) | 96.5% | 3.5% | 91.7% | 95.8% |

@@ -315,6 +315,7 @@ class AgenteClasificadorSegmentador:
         patterns_elim_fn = [r'\b1[-_/]8\b', r'\b1[-_/]4\b', r'\b1[-_/]2\b', r'\boro\b', r'\bs\.o\.\b', r'\bso\b']
         if any(kw in filename for kw in keywords_eliminatoria_fn) or any(re.search(pat, filename) for pat in patterns_elim_fn):
             return "eliminatoria", "2_arqueros"
+        
 
         if any(p in filename for p in ["4-arqueros", "4arqueros"]):
             return "clasificacion", "4_arqueros"
@@ -446,7 +447,7 @@ class AgenteClasificadorSegmentador:
                         "ruta_recorte_original": crop_orig_path,
                         "ruta_recorte": crop_act_path,
                         "label": label_str,
-                        "es_pagina_informacion": False,
+                        "es_pagina_informacion": False,  # <-- FALSE FOR ELIMINATORIAS AND CLASIFICACION!
                         "es_cuadrante_vacio": es_vacio,
                         "es_mejorado": False,
                         "razon_preclasificacion": "Planilla de Eliminatoria (fuera de alcance para ranking)" if es_elim else ("Cuadrante con datos anotados" if not es_vacio else "Cuadrante sin puntuaciones registradas")
