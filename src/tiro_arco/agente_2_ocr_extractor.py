@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🤖 Agente 2 (v61): Extractor OCR con Homogeneidad Documental, Descarte de Hoja Completa,
+🤖 Agente 2 (v62): Extractor OCR con Homogeneidad Documental, Descarte de Hoja Completa,
 Matching Robusto de Recortes Seleccionados y Refactorización Secundaria vía LLM.
 """
 
@@ -18,6 +18,7 @@ import numpy as np
 import cv2
 import threading
 
+
 class RateLimiter:
     """ Controlador de Tasa (35 RPM para prevenir HTTP 429 en API Key de NVIDIA NIM) """
     def __init__(self, requests_per_minute=35):
@@ -33,6 +34,7 @@ class RateLimiter:
                 sleep_time = self.interval - elapsed
                 time.sleep(sleep_time)
             self.last_request_time = time.time()
+
 
 global_rate_limiter = RateLimiter(requests_per_minute=35)
 
@@ -70,6 +72,43 @@ def _obtener_nvidia_api_key():
         directorio_actual = padre
     return ""
 
+
+def extraer_club_robusto(text_raw):
+    if not text_raw or not isinstance(text_raw, str):
+        return "N/A"
+    cleaned = re.sub(r'<x_[0-9\.]+>|<y_[0-9\.]+>|<class_[^>]+>', '', text_raw)
+
+    # 1. Regex por prefijos explícitos de club o entidad
+    m_club = re.search(
+        r'\b(?:P/A/C|P/F/C|P/F/G|PIFIG|FFG|PIAIC|Club|Organiza(?:dor)?)\b\s*:?\s*\*?\*?([^\*\n<]+)',
+        cleaned,
+        re.IGNORECASE
+    )
+    if m_club:
+        cand = m_club.group(1).strip()
+    else:
+        # 2. Regex por patrones de nombres institucionales
+        m_asoc = re.search(
+            r'\b(Asociaci[oó]n\s+[A-Za-zÁÉÍÓÚáéíóúÑñ\s]+|Asoc\.\s+[A-Za-zÁÉÍÓÚáéíóúÑñ\s]+|Club\s+[A-Za-zÁÉÍÓÚáéíóúÑñ\s]+|Grupo\s+[A-Za-zÁÉÍÓÚáéíóúÑñ\s]+)',
+            cleaned,
+            re.IGNORECASE
+        )
+        if m_asoc:
+            cand = m_asoc.group(1).strip()
+        else:
+            cand = "N/A"
+
+    if cand != "N/A":
+        # Eliminar número de contención/target si quedó pegado al final de la línea
+        cand = re.sub(r'\b[0-9]{1,2}\s*[A-D]\b.*$', '', cand, flags=re.IGNORECASE).strip()
+        # Limpieza de direcciones y datos de ubicación entre paréntesis
+        cand = re.sub(r'\([^\)]*(?:Av\.|Km\.|Calle|Ruta|Argentina|Fuerza|AFE|AFPSF|AFAPIECO)[^\)]*\)', '', cand, flags=re.IGNORECASE)
+        cand = re.sub(r'\b(RM|CM|BM|RW|CW|BW|TM|TW|IM|IW)\b', '', cand, flags=re.IGNORECASE).strip()
+        cand = re.sub(r'[\*\#\_~]', ' ', cand).strip()
+        cand = re.sub(r'\s+', ' ', cand).strip()
+        if len(cand) > 1:
+            return cand
+    return "N/A"
 
 
 def extraer_datos_cabecera_robusta(text_raw, target_id_default="N/A"):
@@ -113,41 +152,48 @@ def extraer_datos_cabecera_robusta(text_raw, target_id_default="N/A"):
         cleaned_no_cat = re.sub(pat, '', cleaned_no_cat, flags=re.IGNORECASE)
 
     # 3. Club
-    club = "N/A"
-    m_club = re.search(r'\b(?:P/A/C|P/F/C|PIAIC|Club)\b\s*:?\s*([^\n<]+)', cleaned_no_cat, re.IGNORECASE)
-    if m_club:
-        cand_club = m_club.group(1).strip()
-        cand_club = re.sub(r'\b[0-9]{1,2}\s*[A-D]\b.*$', '', cand_club, flags=re.IGNORECASE).strip()
-        if len(cand_club) > 1:
-            club = cand_club
+    club = extraer_club_robusto(cleaned_no_cat)
 
     # 4. Arquero
     arquero = "Desconocido"
-    
-    # 4a. Intento por etiqueta estricta ('Arquero:', 'Archer:', 'Athlete:', 'Nombre:')
-    m_arq = re.search(r'\b(?:Arquero|Archer|Athlete|Nombre)\b[\s\:\-\_]*([^\n\<]+)', cleaned, re.IGNORECASE)
+    invalid_archer_words = [
+        'tanteador', 'planillero', 'juez', 'firma', 'signature',
+        'derei', 'pelfs', 'detectado', 'desconocido', 'null', 'none'
+    ]
+
+    # 4a. Intento por etiqueta ('Arquero:', 'Archer:', 'Athlete:', 'Nombre:' + variantes OCR)
+    m_arq = re.search(
+        r'(?:\b(?:Arquero|Archer|Athlete|Nombre)\b[\s\:\-\_]*|\b(?:Auer|Aquer|Aque|Are)\b[\s\:\-\_]+)([^\n\<]+)',
+        cleaned,
+        re.IGNORECASE
+    )
     if m_arq:
         cand = m_arq.group(1).strip()
         cand = re.sub(r'\b[0-9]{1,2}\s*[A-D]\b.*$', '', cand, flags=re.IGNORECASE).strip()
-        cand = re.sub(r'(?:P/A/C|P/F/C|PIAIC|Club).*$', '', cand, flags=re.IGNORECASE).strip()
+        cand = re.sub(r'\b(?:P/A/C|P/F/C|P/F/G|PIFIG|FFG|PIAIC|Club)\b.*$', '', cand, flags=re.IGNORECASE).strip()
         words = cand.lower().split()
-        if cand and not any(w in ['tanteador', 'planillero', 'juez', 'firma', 'signature', 'detectado', 'desconocido', 'null', 'none'] for w in words):
+        if cand and not any(w in invalid_archer_words for w in words):
             if len(cand) > 2 and not cand.isdigit():
                 arquero = cand
 
     # 4b. Intento por posición si no hubo etiqueta o dio Desconocido
     if arquero == "Desconocido":
-        m_before = re.search(r'([A-Za-zÁÉÍÓÚáéíóúÑñ0-9\s\.\,\-]{3,60}?)\s+\b(?:P/A/C|P/F/C|PIAIC|Club)\b\s*:', cleaned, re.IGNORECASE)
+        m_before = re.search(
+            r'([A-Za-zÁÉÍÓÚáéíóúÑñ0-9\s\.\,\-]{3,60}?)\s+\b(?:P/A/C|P/F/C|P/F/G|PIFIG|FFG|PIAIC|Club)\b\s*:',
+            cleaned,
+            re.IGNORECASE
+        )
         if m_before:
             cand_b = m_before.group(1).strip()
             cand_b = re.sub(r'\b[0-9]{1,2}\s*[A-D]\b', '', cand_b, flags=re.IGNORECASE).strip()
+            header_noise = ['torneo', 'copa', 'asociacion', 'asociación', 'federacion', 'federación', 'archery', 'world', 'ronda', 'turno']
             if '\n' in cand_b:
                 lines = [l.strip() for l in cand_b.split('\n') if l.strip()]
-                valid_lines = [l for l in lines if not any(w in l.lower() for w in ['torneo', 'copa', 'asociacion', 'asociación', 'federacion', 'federación', 'archery', 'world', 'ronda', 'turno'])]
+                valid_lines = [l for l in lines if not any(w in l.lower() for w in header_noise)]
                 if valid_lines:
                     cand_b = valid_lines[-1]
             words_b = cand_b.lower().split()
-            if cand_b and not any(w in ['torneo', 'copa', 'asociacion', 'asociación', 'federacion', 'federación', 'archery', 'world', 'tanteador', 'planillero', 'juez', 'detectado', 'desconocido'] for w in words_b):
+            if cand_b and not any(w in header_noise + invalid_archer_words for w in words_b):
                 if len(cand_b) > 2 and not cand_b.isdigit():
                     arquero = cand_b
 
@@ -344,10 +390,10 @@ class Agente2OCRExtractor:
                                     flechas.append(val_str)
                             written_val = int(cells[4]) if len(cells) >= 5 and cells[4].isdigit() else 0
                             series_extraidas.append({
-                                    "serie": s_num,
-                                    "flechas": flechas,
-                                    "suma_parcial_escrita": written_val
-                                })
+                                "serie": s_num,
+                                "flechas": flechas,
+                                "suma_parcial_escrita": written_val
+                            })
                     except ValueError:
                         continue
 
@@ -370,10 +416,10 @@ class Agente2OCRExtractor:
                                         flechas.append(val_str)
                                 written_val = int(parts[4]) if len(parts) >= 5 and parts[4].isdigit() else 0
                                 series_extraidas.append({
-                                        "serie": s_num,
-                                        "flechas": flechas,
-                                        "suma_parcial_escrita": written_val
-                                    })
+                                    "serie": s_num,
+                                    "flechas": flechas,
+                                    "suma_parcial_escrita": written_val
+                                })
                         except ValueError:
                             pass
 
@@ -415,7 +461,7 @@ class Agente2OCRExtractor:
         env_ollama_host = os.environ.get("OLLAMA_HOST", "archery-ollama") if "archery-ollama" in os.environ.get("OLLAMA_URL", "") else os.environ.get("OLLAMA_HOST", "localhost")
         self.ollama_url = f"http://{env_ollama_host}:11434/v1/chat/completions"
         self.ollama_tags_url = os.environ.get("OLLAMA_URL", "").split("/v1")[0].rstrip("/") + "/api/tags" if os.environ.get("OLLAMA_URL") else f"http://{env_ollama_host}:11434/api/tags"
-        self.nvidia_url = "https://integrate.api.nvidia.com/v1/chat/completions"
+        self.nvidia_url = "[https://integrate.api.nvidia.com/v1/chat/completions](https://integrate.api.nvidia.com/v1/chat/completions)"
 
         self.ollama_modelos_disponibles = self._obtener_modelos_ollama_locales()
         self.model_chain = self._construir_cadena_modelos()
@@ -452,7 +498,7 @@ class Agente2OCRExtractor:
 
     def _calcular_totales_y_cotejar(self, datos, es_grilla_vacia=False):
         series = datos.get("series", [])
-        
+
         total_puntos_calc = 0
         cant_10s_calc = 0
         cant_9s_calc = 0
@@ -499,7 +545,7 @@ class Agente2OCRExtractor:
             s["suma_parcial_calculada"] = suma_parcial
             total_puntos_calc += suma_parcial
             s["total_acumulado_calculado"] = total_puntos_calc
-            
+
             written = s.get("suma_parcial", s.get("suma_parcial_escrita", 0))
             s["cotejo_serie_coincide"] = (written == suma_parcial)
             series_limpias.append(s)
@@ -522,7 +568,7 @@ class Agente2OCRExtractor:
 
         datos["series"] = series_limpias
         datos["sin_puntos_registrados"] = sin_puntos
-        
+
         if sin_puntos:
             datos["observacion"] = "Sin Puntos Registrados"
         else:
@@ -538,34 +584,35 @@ class Agente2OCRExtractor:
             "cant_10s": cant_10s_calc if not sin_puntos else 0,
             "cant_9s": cant_9s_calc if not sin_puntos else 0
         }
-        
+
         if sin_puntos:
             datos["cotejo_total_coincide"] = True
         elif written_total > 0:
             datos["cotejo_total_coincide"] = (total_puntos_calc == written_total)
         else:
             datos["cotejo_total_coincide"] = True
-            
+
         return datos
 
     def _refactorizar_nemotron_con_llm(self, content_text, tipo_juego="clasificacion", target_id_default="N/A"):
         if not self.api_key or not content_text:
             return None
 
-        url = "https://integrate.api.nvidia.com/v1/chat/completions"
+        url = "[https://integrate.api.nvidia.com/v1/chat/completions](https://integrate.api.nvidia.com/v1/chat/completions)"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
 
+        ticks = "`" * 3
         prompt_refactor = f"""
         Eres un estructurador JSON experto en Tiro con Arco (World Archery / FATARCO).
         Toma el siguiente texto crudo (LaTeX/Markdown) devuelto por Nemotron 3.5 Parse y conviértelo al formato JSON exacto necesario para el MVP:
 
         TEXTO CRUDO DE NEMOTRON:
-        ```markdown
+        {ticks}markdown
         {content_text}
-        ```
+        {ticks}
 
         ESTRUCTURA JSON REQUERIDA:
         {{
@@ -631,7 +678,7 @@ class Agente2OCRExtractor:
         if not self.api_key:
             return None
 
-        url = "https://ai.api.nvidia.com/v1/retrieval/nvidia/nemotron-3.5-parse/parse"
+        url = "[https://ai.api.nvidia.com/v1/retrieval/nvidia/nemotron-3.5-parse/parse](https://ai.api.nvidia.com/v1/retrieval/nvidia/nemotron-3.5-parse/parse)"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Accept": "application/json"
@@ -669,7 +716,7 @@ class Agente2OCRExtractor:
                     if content_text and isinstance(content_text, str):
 
                         parsed_nemotron = self._parsear_salida_nemotron(content_text, target_id_default=target_id_default, tipo_juego=tipo_juego)
-                        
+
                         if len(parsed_nemotron.get("series", [])) == 0 and ("\\begin{tabular}" in content_text or "|" in content_text):
                             parsed_llm = self._refactorizar_nemotron_con_llm(content_text, tipo_juego=tipo_juego, target_id_default=target_id_default)
                             if parsed_llm and len(parsed_llm.get("series", [])) > 0:
@@ -796,7 +843,7 @@ class Agente2OCRExtractor:
                 print(f"[Agente 2] 🚀 Consultando {provider} ({model_name})...")
                 resp = requests.post(url, headers=headers, json=payload, timeout=self.http_timeout)
                 elapsed = time.time() - t0
-                
+
                 if resp.status_code == 200:
                     data = resp.json()
                     choices = data.get("choices", [])
@@ -857,7 +904,7 @@ class Agente2OCRExtractor:
                         flechas.append("M")
                     else:
                         flechas.append(t_up)
-                
+
                 written_val = None
                 if len(tokens) >= 4:
                     try:
@@ -924,9 +971,9 @@ class Agente2OCRExtractor:
         es_grilla_vacia = tarea.get("es_cuadrante_vacio", False) or ImageEnhancer.detectar_tabla_vacia(ruta_procesada)
 
         resultado_ocr = self._consultar_vlm(
-            ruta_imagen=ruta_original_resized, 
-            tipo_juego=tipo_juego, 
-            es_grilla_vacia=es_grilla_vacia, 
+            ruta_imagen=ruta_original_resized,
+            tipo_juego=tipo_juego,
+            es_grilla_vacia=es_grilla_vacia,
             target_id_default=target_id_default,
             ruta_fallback_procesada=ruta_procesada
         )
@@ -949,7 +996,7 @@ class Agente2OCRExtractor:
 
     def procesar_manifiesto_agente1(self, manifiesto_agente1):
         tareas = manifiesto_agente1.get("tareas_agente2", [])
-        
+
         manifiesto_agente2 = {
             "archivo_origen": manifiesto_agente1.get("archivo_origen", ""),
             "total_tareas_recibidas": len(tareas),
@@ -1038,7 +1085,7 @@ class Agente2OCRExtractor:
 
         transcripciones_actualizadas = list(transcripciones_map.values())
         transcripciones_actualizadas.sort(key=lambda x: (x.get("pagina", 1), str(x.get("target_id", ""))))
-        
+
         if not isinstance(manifiesto_agente2_previo, dict):
             manifiesto_agente2_previo = {}
         manifiesto_agente2_previo["transcripciones"] = transcripciones_actualizadas

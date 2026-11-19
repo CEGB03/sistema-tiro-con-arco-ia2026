@@ -3,15 +3,16 @@
 """
 🎯 Agente 3 (v8): Validador Lógico, Autocompletado desde Padrón CSV y Auditoría Estricta.
 
-Novedades en v7:
+Novedades en v8:
 1. Autocompletado Automático con Padrón CSV Ground Truth:
-   - Si no se provee un padrón en __init__, busca 'torneo_indoor_san_francisco_detallado.csv' en las rutas conocidas
+   - Si no se provee un padrón en __init__, busca los CSV en las rutas conocidas
      y carga el mapeo diana (Target) -> (Arquero, Categoría) para autocompletar cabeceras con OCR ilegible.
-2. Regla Inquebrantable de Auditoría Matemáticas (Punto 5 Devolución):
+2. Regla Inquebrantable de Auditoría Matemática:
    - Si las sumas no cierran o hay discrepancias entre papel y calculadas (matematica_valida == False),
      el estado JAMÁS puede ser APROBADO_AUTOMATICO ni tener score_certeza = 100.0%. Se asigna REQUIERE_REVISION_HUMANA o REVISION_RECOMENDADA.
-3. Separación Transparente de Totales:
-   - Mantiene estrictamente separados los valores leídos del papel (totales_oficiales_planilla) y los deducidos serie a serie (totales_calculados_series).
+3. Separación Transparente de Totales y Conteo Diferenciado Sala vs Aire Libre:
+   - Mantiene separados los valores leídos del papel (totales_oficiales_planilla) y los deducidos serie a serie (totales_calculados_series),
+     junto con la deducción de flechas ilegibles y reconciliación 15 vs 16 / 5 vs 6.
 """
 
 import os
@@ -265,7 +266,7 @@ class Agente3ValidadorConciliador:
             if series_raw:
                 ultima_s = series_raw[-1]
                 acum_escrito_ult = ultima_s.get("total_acumulado_escrito", 0) or ultima_s.get("acumulado_escrito", 0) or ultima_s.get("acumulado", 0)
-                
+
                 if acum_escrito_ult > 0:
                     total_puntos_oficial = acum_escrito_ult
                     total_oficial_estado = "DEDUCIDO_ULTIMA_SERIE"
@@ -390,7 +391,7 @@ class Agente3ValidadorConciliador:
 
     def auditar_manifiesto_completo(self, manifiesto_agente2):
         transcripciones = manifiesto_agente2.get("transcripciones", [])
-        
+
         auditorias = []
         total_aprobados = 0
         total_revision = 0

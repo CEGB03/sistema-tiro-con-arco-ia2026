@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🤖 Agente 1 (v36): Clasificador y Segmentador Semántico con Renderizado PDF Ultra-HD 300 DPI y Pre-OCR:
+🤖 Agente 1 (v37 - Merge Unificado): Clasificador y Segmentador Semántico con Renderizado PDF Ultra-HD 300 DPI y Pre-OCR:
 - Renderiza PDFs a resolución Ultra-HD de 300 DPI (scale=4.1667) para eliminar borrosidad en tablas y números manuscritos.
-- Resetea caches de páginas y recortes al cargar nuevos documentos.
-- Pre-OCR de página completa para filtrado infalible de descartes (Portadas / Eliminatorias).
+- Preserva las mejoras de página realizadas en el Paso 0 al ejecutar el Paso 1 sobre el mismo documento.
+- Pre-OCR de página completa para filtrado de descartes (Portadas / Eliminatorias).
 - Clasifica planillas de Eliminatorias como tipo_juego="eliminatoria", layout="2_arqueros", es_pagina_informacion=False.
 """
 
@@ -86,6 +86,7 @@ class AgenteClasificadorSegmentador:
             raise FileNotFoundError(f"El archivo '{ruta_archivo}' no existe.")
 
         self.reset_caches()
+        nombre_archivo = os.path.basename(ruta_archivo)
         es_pdf = ruta_archivo.lower().endswith('.pdf')
         paginas_info = []
 
@@ -109,6 +110,7 @@ class AgenteClasificadorSegmentador:
                         pass
 
                 pag_data = {
+                    "archivo_origen": nombre_archivo,
                     "numero_pagina": i + 1,
                     "ruta_original": img_orig_path,
                     "ruta_actual": img_act_path,
@@ -132,6 +134,7 @@ class AgenteClasificadorSegmentador:
                     pass
 
             pag_data = {
+                "archivo_origen": nombre_archivo,
                 "numero_pagina": 1,
                 "ruta_original": img_orig_path,
                 "ruta_actual": img_act_path,
@@ -188,7 +191,7 @@ class AgenteClasificadorSegmentador:
 
         for num_pag in self.paginas_cache:
             self.deshacer_mejora_pagina(num_pag)
-        return True, f"↩️ Se restauró la versión original para TODAS las páginas."
+        return True, "↩️ Se restauró la versión original para TODAS las páginas."
 
     @staticmethod
     def tiene_tabla_de_tiros(ruta_imagen):
@@ -339,7 +342,6 @@ class AgenteClasificadorSegmentador:
         if w > h * 1.15:
             return "eliminatoria", "2_arqueros"
 
-        pattern_1_arquero = r'(?:\b[0-9]{1,2}[a-d][\_\-])|(?:crop|recorte|individual|1[-_]arquero|1arquero)'
         if re.search(pattern_1_arquero, filename):
             return "clasificacion", "1_arquero"
 
@@ -349,21 +351,24 @@ class AgenteClasificadorSegmentador:
         return "clasificacion", "4_arqueros"
 
     def procesar_documento(self, ruta_archivo, tipo_juego_manual=None, page_overrides=None):
-        if not self.paginas_cache or any(p.get("ruta_original") and not os.path.exists(p["ruta_original"]) for p in self.paginas_cache.values()):
-            self.extraer_paginas_pdf_o_imagen(ruta_archivo)
-        elif self.paginas_cache and os.path.basename(list(self.paginas_cache.values())[0].get("ruta_original", "")).split("_")[0] != os.path.basename(ruta_archivo).split(".")[0]:
+        nombre_archivo = os.path.basename(ruta_archivo)
+        cache_invalido = (
+            not self.paginas_cache
+            or any(p.get("ruta_original") and not os.path.exists(p["ruta_original"]) for p in self.paginas_cache.values())
+            or list(self.paginas_cache.values())[0].get("archivo_origen") != nombre_archivo
+        )
+        if cache_invalido:
             self.extraer_paginas_pdf_o_imagen(ruta_archivo)
 
         self.recortes_cache = {}
 
         manifiesto = {
-            "archivo_origen": os.path.basename(ruta_archivo),
+            "archivo_origen": nombre_archivo,
             "total_paginas": len(self.paginas_cache),
             "tareas_agente2": []
         }
 
-        fn_global = os.path.basename(ruta_archivo)
-        target_desde_nombre = extract_target_from_filename(fn_global)
+        target_desde_nombre = extract_target_from_filename(nombre_archivo)
         margin = 20
 
         for num_pag, pag_data in self.paginas_cache.items():
@@ -373,7 +378,7 @@ class AgenteClasificadorSegmentador:
             if page_overrides and isinstance(page_overrides, dict):
                 modo_manual = page_overrides.get(str(num_pag), modo_manual)
 
-            tipo_juego_pagina, layout = self.analizar_layout(img_path, tipo_juego_manual=modo_manual, pre_ocr_texto=pre_ocr_txt, fn_origen=fn_global)
+            tipo_juego_pagina, layout = self.analizar_layout(img_path, tipo_juego_manual=modo_manual, pre_ocr_texto=pre_ocr_txt, fn_origen=nombre_archivo)
             img = Image.open(img_path)
             w, h = img.size
 
@@ -490,4 +495,4 @@ class AgenteClasificadorSegmentador:
 
         for lbl in self.recortes_cache:
             self.deshacer_mejora_recorte(lbl)
-        return True, f"↩️ Se restauró la versión original para TODOS los recortes."
+        return True, "↩️ Se restauró la versión original para TODOS los recortes."
