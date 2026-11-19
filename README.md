@@ -24,6 +24,7 @@ El procesamiento sigue un orden estrictamente desacoplado de 7 etapas:
 │  Paso 0   │ ──>│  Paso 1   │ ──>│  Paso 2   │ ──>│  Paso 3   │ ──>│  Métricas    │ ──>│  Paso 4   │ ──>│  Métricas    │
 │ Carga/HD  │    │ Agente 1  │    │ Agente 2  │    │ Agente 3  │    │ Pre-Scraping │    │ Agente 4  │    │ Post-Scraping│
 └───────────┘    └───────────┘    └───────────┘    └───────────┘    └──────────────┘    └───────────┘    └──────────────┘
+
 ```
 
 1. **🖼️ Paso 0 — Carga y Renderizado HD:** Ingesta de archivos PDF o imágenes con renderizado de escala suave (`scale=3`, 300 DPI) para preservar la nitidez de trazos manuscritos.
@@ -38,7 +39,16 @@ El procesamiento sigue un orden estrictamente desacoplado de 7 etapas:
 
 ## 📈 Evaluación Cuantitativa y Benchmark de Eficacia
 
+### 🌐 Impacto Significativo de la Mejora en el Scraping Web (Agente 4)
+
+La optimización del módulo de scraping sobre `arquerosonline.com.ar` representó una mejora crítica en la confiabilidad global del sistema:
+
+* **Resolución de pérdidas y errores del OCR local:** Previamente, al depender únicamente de la extracción óptica local, se producían pérdidas parciales en nombres de arqueros, omisiones o deformaciones en los nombres de clubes y casos donde el puntaje total (o de turno) quedaba mal relevado por el OCR o resultaba ambiguo frente a la suma manuscrita de la planilla.
+* **Certeza sobre los valores reales y verdaderos:** Al incorporar el relevamiento web completo (soporte de carga diferida AJAX, resolución de sesión y contraste por Turno 1, Turno 2 y categoría), el sistema dispone de una **fuente de verdad oficial verificable** para cada competencia.
+* **Trazabilidad entre dato cierto y dato erróneo:** Gracias a este cotejo en vivo, el operador puede distinguir de forma inequívoca **cuándo un valor extraído es cierto** (`🟢 VALIDADO_OK_WEB`) y **cuándo no es cierto** (`🟡 DISCREPANCIA_CON_SUGERENCIA` o `🔴 ALERTA_PLANILLA_OMISA`), identificando con exactitud diferencias de puntaje por turno, planillas omitidas por el OCR o variaciones en el nombre del arquero y del club antes de consolidar los resultados.
+
 ### Métricas de Rendimiento del Pipeline Actual (Agente 3)
+
 * **Precisión por Flecha:** `96.5%` (flechas transcritas exactamente igual a la Verdad Terreno).
 * **Tasa de Error por Flecha:** `3.5%` (discrepancias detectadas en anotación o lectura).
 * **Planillas 100% Exactas:** `91.7%` (planillas sin un solo error de trascripción).
@@ -47,7 +57,7 @@ El procesamiento sigue un orden estrictamente desacoplado de 7 etapas:
 ### Tabla Comparativa contra Línea de Base (Benchmark Oficial)
 
 | Modelo / Pipeline | Precisión Flecha (%) | Error Flecha (%) | Planillas Exactas (%) | Precisión Total (%) |
-| :--- | :---: | :---: | :---: | :---: |
+| --- | --- | --- | --- | --- |
 | ⚠️ **Tesseract OCR (Línea de Base Local)** | `68.2%` | `31.8%` | `41.7%` | `58.3%` |
 | 🔍 **Nemotron 3.5 Parse (VLM sin Refactorizador)** | `88.4%` | `11.6%` | `75.0%` | `83.3%` |
 | 🚀 **Pipeline Multi-Agente Actual (VLM + LLM + Agente 3)** | **`96.5%`** | **`3.5%`** | **`91.7%`** | **`95.8%`** |
@@ -57,6 +67,7 @@ El procesamiento sigue un orden estrictamente desacoplado de 7 etapas:
 ## 🔍 Ejemplos de Salida de los Agentes
 
 ### ✂️ Agente 1 (Manifiesto de Layout y Segmentación)
+
 ```json
 {
   "archivo_origen": "2026-05-03-S-AFPSF-Planillas.pdf",
@@ -73,9 +84,11 @@ El procesamiento sigue un orden estrictamente desacoplado de 7 etapas:
     }
   ]
 }
+
 ```
 
 ### 👁️ Agente 2 (Inferencia Raw & JSON Refactorizado)
+
 ```json
 {
   "valido": true,
@@ -96,9 +109,11 @@ El procesamiento sigue un orden estrictamente desacoplado de 7 etapas:
   ],
   "modelo_usado": "nvidia:nemotron-3.5-parse"
 }
+
 ```
 
 ### ⚖️ Agente 3 (Auditoría Lógica y Control de Certeza)
+
 ```json
 {
   "pagina": 1,
@@ -112,9 +127,11 @@ El procesamiento sigue un orden estrictamente desacoplado de 7 etapas:
   "advertencias": [],
   "errores": []
 }
+
 ```
 
 ### 🌐 Agente 4 (Verificador Web & Sugerencias de Corrección)
+
 ```json
 {
   "pagina": 1,
@@ -130,6 +147,7 @@ El procesamiento sigue un orden estrictamente desacoplado de 7 etapas:
   "estado_web": "🟡 DISCREPANCIA_NOMBRE_WEB",
   "dns_confirmado": false
 }
+
 ```
 
 ---
@@ -147,8 +165,13 @@ El procesamiento sigue un orden estrictamente desacoplado de 7 etapas:
 │   ├── raw/                             # Planillas originales en PDF / JPG
 │   ├── processed/                       # Recortes de cuadrantes y verdad terreno (CSV)
 │   └── audit/                           # Archivos de auditoría JSON exportados
-├── notebooks/                           # Notebooks Jupyter para benchmark y evaluación
-│   └── 01_evaluacion_ocr.ipynb          # Notebook oficial de evaluación contra Verdad Terreno
+├── notebooks/                                   # Notebooks Jupyter secuenciales de evidencia y medición
+│   ├── 01_exploracion_datos.ipynb               # Inventario de planillas raw y análisis de Verdad Terreno (CSV)
+│   ├── 02_segmentacion_agente1.ipynb            # Renderizado 300 DPI, detección de layout y mejora CLAHE (Agente 1)
+│   ├── 03_extraccion_ocr_agente2.ipynb          # Comparativa Tesseract vs. VLM Multimodal + Refactorizador (Agente 2)
+│   ├── 04_auditoria_logica_agente3.ipynb        # Deducción de flechas, reconciliación 5/6 y certeza (Agente 3)
+│   ├── 05_verificacion_web_agente4.ipynb        # Scraping oficial en arquerosonline.com.ar y cotejo por turnos (Agente 4)
+│   └── 06_evaluacion_metricas_benchmark.ipynb   # Medición cuantitativa end-to-end, benchmark y latencia por etapa
 ├── src/
 │   └── tiro_arco/                       # Código fuente principal del sistema multi-agente
 │       ├── __init__.py
@@ -162,6 +185,7 @@ El procesamiento sigue un orden estrictamente desacoplado de 7 etapas:
     ├── test_agente2.py
     ├── test_agente3.py
     └── test_agente4.py
+
 ```
 
 ---
@@ -169,45 +193,58 @@ El procesamiento sigue un orden estrictamente desacoplado de 7 etapas:
 ## 🚀 Guía de Instalación y Ejecución
 
 ### Opción A: Ejecución Orquestada con Docker (Recomendada)
+
 ### 1. Requisitos Previos
+
 * Docker Desktop o Docker Engine con Docker Compose V2.
 
 ### 2. Construir e Iniciar los Contenedores
+
 En la raíz de tu repositorio, ejecutá:
 
 ```bash
 docker compose up -d --build
+
 ```
 
 Esto iniciará dos servicios interconectados en una red interna privada:
+
 * **`archery_multiagent_app`**: Servidor Gradio y pipeline multi-agente en el puerto `7860`.
 * **`archery_ollama_ocr`**: Motor local de modelos de visión en el puerto `11434`.
 
 ### 3. Descargar el Modelo de Visión en Ollama Local
+
 Para habilitar la inferencia visual 100% privada y local sin depender de la nube, ejecutá en tu terminal:
 
 ```bash
 docker exec -it archery_ollama_ocr ollama pull qwen2-vl
+
 ```
 
 *(Opcional: también podés descargar `qwen2-vl:7b` o `llama3.2-vision`)*.
 
 ### 4. Abrir la Aplicación Web
+
 Una vez iniciado el contenedor, abrí tu navegador e ingresá a:
 
 👉 **http://localhost:7860**
 
 ### 5. Visualizacion de logs
+
 Para poder ver los logs del docker, ejecutá en tu terminal:
 
 ```bash
 docker compose logs -f archery-app
+
 ```
 
 ### 6. Frenado del contenedor
+
 Para poder frenar el contenedor de su ejecucion, ejecutá en tu terminal:
+
 ```bash
 docker compose down
+
 ```
 
 ### Opción B: Ejecución en Entorno Local con Python (`uv`)
@@ -219,11 +256,13 @@ sudo apt update && sudo apt install -y tesseract-ocr tesseract-ocr-spa libgl1 li
 # 2. Sincronizar el entorno Python e iniciar Gradio
 uv sync
 uv run tiro-con-arco
+
 ```
 
 ---
 
 ## 👤 Autoría y Derechos
+
 * **Proyecto Capstone:** Inteligencia Artificial (2026).
 * **Autor:** Carlos Emanuel Gomez Bonelli.
 * **Carrera:** Ingenieria en Informatica (2026).

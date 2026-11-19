@@ -62,7 +62,7 @@ def _generar_thumb_html(ruta_img, max_dim=140):
 
         return (
             f'<a href="{file_url}" target="_blank" '
-            f'onclick="try {{ var w=window.open(\'about:blank\'); w.document.write(\'<html style=&quot;background:#0f172a;&quot;><head><title>Recorte HD</title></head><body style=&quot;margin:0; background:#0f172a; display:flex; align-items:center; justify-content:center; min-height:100vh;&quot;><img src=&quot;{data_url_full}&quot; style=&quot;max-width:100%; max-height:100vh; object-fit:contain;&quot;/></body></html>\'); return false; }} catch(e) {{ return true; }}" '
+            f'onclick="try {{ var w=window.open(\'about:blank\'); w.document.write(\'<html style="background:#0f172a;"><head><title>Recorte HD</title></head><body style="margin:0; background:#0f172a; display:flex; align-items:center; justify-content:center; min-height:100vh;"><img src="{data_url_full}" style="max-width:100%; max-height:100vh; object-fit:contain;"/></body></html>\'); return false; }} catch(e) {{ return true; }}" '
             f'title="🔍 Haz clic para abrir el recorte en una pestaña nueva" style="text-decoration:none; display:inline-block; text-align:center;">'
             f'<img src="{data_url_thumb}" width="110" style="border-radius:6px; max-height:85px; object-fit:contain; display:block; margin:auto; border:2px solid #3b82f6; transition: transform 0.2s;" onmouseover="this.style.transform=\'scale(1.05)\'" onmouseout="this.style.transform=\'scale(1)\'" />'
             f'<small style="color:#2563eb; font-weight:bold; font-size:11px; display:block; margin-top:3px;">🔍 Abrir imagen ↗</small>'
@@ -92,7 +92,7 @@ def cargar_documento_paso0(archivo_input, state_tiempos=None):
             gr.update(interactive=False), # btn_paso2
             gr.update(interactive=False), # btn_paso3
             gr.update(interactive=False), # btn_metricas
-            {"paso0": 0.0, "paso1": 0.0, "paso2": 0.0, "paso3": 0.0}
+            {"paso0": 0.0, "paso1": 0.0, "paso2": 0.0, "paso3": 0.0, "paso4": 0.0}
         )
 
     ruta = archivo_input.name
@@ -113,6 +113,7 @@ def cargar_documento_paso0(archivo_input, state_tiempos=None):
 
     t_elapsed = round(time.time() - t0, 2)
     tiempos["paso0"] = t_elapsed
+    tiempos["paso4"] = 0.0
     return (
         msg_status,
         galeria_paginas,
@@ -510,7 +511,6 @@ def inspeccionar_recorte(opcion_key, manifiesto_2):
     return "⚠️ Recorte no encontrado.", "{}", None
 
 
-
 def extraer_opciones_clubes_y_fechas(manifiesto_1, manifiesto_2=None):
     if not hasattr(agente1, 'paginas_cache') or not agente1.paginas_cache:
         return ["AFPSF - Asociación Familia Piemontesa San Francisco"], "AFPSF", "03/05/2026"
@@ -536,7 +536,6 @@ def extraer_opciones_clubes_y_fechas(manifiesto_1, manifiesto_2=None):
         pat_sigla = sigla.lower()
         pat_nombre = nombre_largo.lower()[:10]
 
-        # REQUIRE PRESENCE ACROSS ALL PAGES (or >= 75% for multi-page PDFs)
         cnt = sum(1 for ptxt in page_texts if pat_sigla in ptxt or pat_nombre in ptxt)
         min_req = total_pags if total_pags <= 3 else int(total_pags * 0.75)
 
@@ -546,7 +545,6 @@ def extraer_opciones_clubes_y_fechas(manifiesto_1, manifiesto_2=None):
                 seen.add(label)
                 opciones_presentes.append(label)
 
-    # Header check across ALL pages
     if page_texts:
         first_lines = [l.strip() for l in page_texts[0].split('\n') if len(l.strip()) > 5]
         for line in first_lines:
@@ -564,6 +562,7 @@ def extraer_opciones_clubes_y_fechas(manifiesto_1, manifiesto_2=None):
 
     primer_club = opciones_presentes[0].split(" - ")[0].strip()
     return opciones_presentes, primer_club, "03/05/2026"
+
 
 def ejecutar_paso3_auditoria(manifiesto_1, manifiesto_2, criterio_orden="Prioridad (Nivel de Urgencia)", state_tiempos=None):
     t0 = time.time()
@@ -675,19 +674,10 @@ def inspeccionar_auditoria(opcion_key, manifiesto_3):
         return json.dumps({"info": "⚠️ Selecciona un arquero para ver el detalle de auditoría."}, indent=2, ensure_ascii=False)
 
     auditados = manifiesto_3.get("resultados_auditados", [])
-    discrepancias_web_cnt = 0
-    validados_web_cnt = 0
-    ausencias_web_cnt = 0
-    if manifiesto_4 and isinstance(manifiesto_4, dict):
-        res_g4 = manifiesto_4.get("resumen_agente4", {})
-        discrepancias_web_cnt = res_g4.get("discrepancias_con_sugerencia", 0)
-        validados_web_cnt = res_g4.get("validados_ok_web", 0)
-        ausencias_web_cnt = res_g4.get("ausencias_dns_confirmadas", 0)
     for item in auditados:
         pag = str(item.get('pagina'))
         pos = str(item.get('target_id'))
         item_key = f"{pag}_{pos}"
-
         if item_key == str(opcion_key):
             return json.dumps(item, indent=2, ensure_ascii=False)
 
@@ -695,30 +685,46 @@ def inspeccionar_auditoria(opcion_key, manifiesto_3):
 
 
 def ir_a_metricas_ui(manifiesto_3, manifiesto_4=None, criterio_orden="Prioridad (Nivel de Urgencia)", state_tiempos=None):
-    html_out = calcular_metricas_evaluacion(manifiesto_3, criterio_orden=criterio_orden, state_tiempos=state_tiempos, manifiesto_4=manifiesto_4)
+    html_out = calcular_metricas_evaluacion(
+        manifiesto_3,
+        criterio_orden=criterio_orden,
+        state_tiempos=state_tiempos,
+        manifiesto_4=manifiesto_4
+    )
     return (
         html_out,
-        gr.update(interactive=False), # Desactiva btn_metricas (ya visto)
-        gr.Tabs(selected="tab_metricas") # REDIRIGE A LA PESTAÑA MÉTRICAS
+        gr.update(interactive=False),
+        gr.Tabs(selected="tab_metricas")
     )
 
 
 # --- PASO 4: VERIFICACIÓN WEB (AGENTE 4) ---
-def ejecutar_paso4_scraping(manifiesto_1, manifiesto_2, manifiesto_3, state_tiempos, club_filtro="AFPSF"):
+def ejecutar_paso4_scraping(manifiesto_1, manifiesto_2, manifiesto_3, state_tiempos, club_filtro="AFPSF", criterio_orden="Prioridad (Nivel de Urgencia)"):
     if not manifiesto_3:
         empty_web_json = json.dumps({"info": "Primero debes ejecutar el Paso 3 (Auditoría Lógica)."}, indent=2, ensure_ascii=False)
-        return "⚠️ Primero debes ejecutar el Paso 3 (Auditoría Lógica).", "{}", gr.Dropdown(choices=[]), empty_web_json, None, state_tiempos, gr.update(interactive=True), gr.update(interactive=False), gr.Tabs(selected="tab_paso3")
+        html_vacio = calcular_metricas_evaluacion(manifiesto_3, criterio_orden=criterio_orden, state_tiempos=state_tiempos, manifiesto_4=None)
+        return (
+            "⚠️ Primero debes ejecutar el Paso 3 (Auditoría Lógica).",
+            "{}",
+            gr.Dropdown(choices=[]),
+            empty_web_json,
+            empty_web_json,
+            None,
+            state_tiempos,
+            html_vacio,
+            gr.update(interactive=True),
+            gr.update(interactive=False),
+            gr.Tabs(selected="tab_paso3")
+        )
 
-    print(f"[UI] 🌐 Ejecutando Paso 4 (Agente 4 - Scraping y Verificación Web Oficial)...")
+    print("[UI] 🌐 Ejecutando Paso 4 (Agente 4 - Scraping y Verificación Web Oficial)...")
     t_inicio_p4 = time.time()
-    
+
     club_busqueda = club_filtro if club_filtro and len(club_filtro.strip()) > 1 else "AFPSF"
     manifiesto_4 = agente4.contrastar_manifiesto_con_web(manifiesto_3, club_filtro=club_busqueda)
-    
-    t_fin_p4 = time.time()
-    duracion_p4 = round(t_fin_p4 - t_inicio_p4, 2)
-    
-    tiempos = state_tiempos or {}
+
+    duracion_p4 = round(time.time() - t_inicio_p4, 2)
+    tiempos = dict(state_tiempos) if state_tiempos else {}
     tiempos["paso4"] = duracion_p4
 
     resumen_g4 = manifiesto_4.get("resumen_agente4", {})
@@ -729,6 +735,7 @@ def ejecutar_paso4_scraping(manifiesto_1, manifiesto_2, manifiesto_3, state_tiem
     resumen_md += f"- **Validados 100% Coincidentes:** `{resumen_g4.get('validados_ok_web', 0)}` 🟢\n"
     resumen_md += f"- **Ausencias Confirmadas (DNS):** `{resumen_g4.get('ausencias_dns_confirmadas', 0)}` ⚪\n"
     resumen_md += f"- **Discrepancias / Sugerencias de Corrección Humana:** `{resumen_g4.get('discrepancias_con_sugerencia', 0)}` 🟡\n"
+    resumen_md += f"- **Alertas de Planilla Omisa:** `{resumen_g4.get('alertas_planilla_omisa', 0)}` 🔴\n"
     resumen_md += f"- **Tiempo de Inferencia / Scraping Paso 4:** `{duracion_p4} segundos` ⏱️\n\n"
 
     resumen_md += "| Recorte | Posición | Arquero Local | Estado Web Oficial | Diagnóstico / Sugerencias de Corrección |\n"
@@ -771,6 +778,13 @@ def ejecutar_paso4_scraping(manifiesto_1, manifiesto_2, manifiesto_3, state_tiem
     }
     json_str = json.dumps(manifiesto_combinado, indent=2, ensure_ascii=False)
 
+    html_metricas_actualizado = calcular_metricas_evaluacion(
+        manifiesto_3,
+        criterio_orden=criterio_orden,
+        state_tiempos=tiempos,
+        manifiesto_4=manifiesto_4
+    )
+
     return (
         resumen_md,
         json_str,
@@ -779,10 +793,21 @@ def ejecutar_paso4_scraping(manifiesto_1, manifiesto_2, manifiesto_3, state_tiem
         json_web_init,
         manifiesto_4,
         tiempos,
-        gr.update(interactive=False), # Desactiva btn_paso4
-        gr.update(interactive=True),  # Activa btn_metricas
-        gr.Tabs(selected="tab_paso4") # REDIRIGE A PESTAÑA PASO 4
+        html_metricas_actualizado,
+        gr.update(interactive=False),
+        gr.update(interactive=True),
+        gr.Tabs(selected="tab_paso4")
     )
+
+
+def _clasificar_sugerencia_web(sug_str):
+    """Distingue discrepancias críticas (puntaje/planilla omisa) de formato de escritura de club."""
+    txt_limpio = re.sub(r'<[^>]+>', '', str(sug_str)).strip()
+    if "Club web:" in txt_limpio:
+        if ("AFAPIECO" in txt_limpio and "Piemontesa" in txt_limpio) or ("AFPSF" in txt_limpio and "Piemontesa" in txt_limpio):
+            return f"🏷️ <b>Discrepancia de Escritura/Formato (Club):</b> {txt_limpio}", False
+        return f"🏛️ <b>Discrepancia de Club (OCR vs Web):</b> {txt_limpio}", True
+    return f"🌐 <b>Discrepancia Web Oficial:</b> {txt_limpio}", True
 
 
 def inspeccionar_verificacion_web(opcion_key, manifiesto_4):
@@ -808,7 +833,7 @@ def inspeccionar_verificacion_web(opcion_key, manifiesto_4):
     return json.dumps(raw_web_list, indent=2, ensure_ascii=False), json.dumps({"info": "⚠️ Detalle de verificación web no encontrado."}, indent=2, ensure_ascii=False)
 
 
-# --- CÁLCULO DE MÉTRICAS DE EFICACIA Y ERROR (CORRECCIÓN #1 DEL PROFESOR) ---
+# --- CÁLCULO DE MÉTRICAS DE EFICACIA Y ERROR ---
 def calcular_metricas_evaluacion(manifiesto_3, csv_path=None, criterio_orden="Prioridad (Nivel de Urgencia)", state_tiempos=None, manifiesto_4=None):
     if not manifiesto_3 or not isinstance(manifiesto_3, dict):
         return """
@@ -819,14 +844,6 @@ def calcular_metricas_evaluacion(manifiesto_3, csv_path=None, criterio_orden="Pr
         """
 
     auditados = manifiesto_3.get("resultados_auditados", [])
-    discrepancias_web_cnt = 0
-    validados_web_cnt = 0
-    ausencias_web_cnt = 0
-    if manifiesto_4 and isinstance(manifiesto_4, dict):
-        res_g4 = manifiesto_4.get("resumen_agente4", {})
-        discrepancias_web_cnt = res_g4.get("discrepancias_con_sugerencia", 0)
-        validados_web_cnt = res_g4.get("validados_ok_web", 0)
-        ausencias_web_cnt = res_g4.get("ausencias_dns_confirmadas", 0)
     if not auditados:
         return "<div style='padding:15px; background-color:#1e293b; color:#cbd5e1; border-radius:8px;'>⚠️ Sin cuadrantes auditados por el Agente 3.</div>"
 
@@ -857,7 +874,7 @@ def calcular_metricas_evaluacion(manifiesto_3, csv_path=None, criterio_orden="Pr
 
     try:
         df_gt = pd.read_csv(csv_path) if csv_path else None
-    except Exception as e:
+    except Exception:
         df_gt = None
 
     total_planillas_evaluadas = 0
@@ -974,12 +991,73 @@ def calcular_metricas_evaluacion(manifiesto_3, csv_path=None, criterio_orden="Pr
                 "errores": errores_especificos
             })
 
+    # Integrar discrepancias y alertas detectadas por el Agente 4 (Verificación Web)
+    discrepancias_web_cnt = 0
+    alertas_omisa_cnt = 0
+
+    if manifiesto_4 and isinstance(manifiesto_4, dict):
+        res_g4 = manifiesto_4.get("resumen_agente4", {})
+        discrepancias_web_cnt = res_g4.get("discrepancias_con_sugerencia", 0)
+        alertas_omisa_cnt = res_g4.get("alertas_planilla_omisa", 0)
+
+        idx_errores = {(e["pagina"], str(e["target_id"])): e for e in detalles_errores_planillas}
+        mapa_aud3 = {(a.get("pagina", 1), str(a.get("target_id", "A"))): a for a in auditados}
+
+        for ver in manifiesto_4.get("verificaciones_web", []):
+            est_w = ver.get("estado_web", "")
+            if est_w not in ("🟡 DISCREPANCIA_CON_SUGERENCIA", "🔴 ALERTA_PLANILLA_OMISA", "⚠️ NO_LOCALIZADO_EN_WEB"):
+                continue
+
+            pag_w = ver.get("pagina", 1)
+            tgt_w = str(ver.get("target_id", "A"))
+            key_w = (pag_w, tgt_w)
+
+            mensajes_web = []
+            es_critica_web = (est_w == "🔴 ALERTA_PLANILLA_OMISA")
+
+            if est_w == "🔴 ALERTA_PLANILLA_OMISA":
+                mensajes_web.append("🔴 <b>Alerta Web (Planilla Omisa):</b> Sin puntos en OCR local pero figura con puntaje en Arqueros Online.")
+            elif est_w == "⚠️ NO_LOCALIZADO_EN_WEB":
+                mensajes_web.append(f"⚠️ <b>No localizado en Web:</b> {ver.get('diagnostico', '')}")
+
+            for s_w in ver.get("sugerencias", []):
+                msg_fmt, crit = _clasificar_sugerencia_web(s_w)
+                mensajes_web.append(msg_fmt)
+                if crit:
+                    es_critica_web = True
+
+            if key_w in idx_errores:
+                for mw in mensajes_web:
+                    if mw not in idx_errores[key_w]["errores"]:
+                        idx_errores[key_w]["errores"].append(mw)
+                if es_critica_web and idx_errores[key_w]["estado_auditoria"] == "APROBADO_AUTOMATICO":
+                    idx_errores[key_w]["estado_auditoria"] = "REQUIERE_REVISION_HUMANA"
+            else:
+                aud_item = mapa_aud3.get(key_w, {})
+                tot_c = aud_item.get("totales_calculados_series", {}).get("total_puntos", 0)
+                tot_o = aud_item.get("totales_oficiales_planilla", {}).get("total_puntos", 0)
+                nuevo_reg = {
+                    "pagina": pag_w,
+                    "target_id": tgt_w,
+                    "target": aud_item.get("target", tgt_w),
+                    "arquero_trans": ver.get("arquero_local", "Desconocido"),
+                    "gt_archer": ver.get("arquero_web_sugerido", "N/A (Sin GT)"),
+                    "tot_ofic": tot_o,
+                    "calc_total": tot_c,
+                    "gt_total": ver.get("total_web_sugerido", "N/A"),
+                    "score_certeza": 50.0 if est_w == "🔴 ALERTA_PLANILLA_OMISA" else (75.0 if es_critica_web else 88.0),
+                    "estado_auditoria": "REQUIERE_REVISION_HUMANA" if es_critica_web else "REVISION_RECOMENDADA",
+                    "ruta_recorte": ver.get("ruta_recorte", ""),
+                    "errores": mensajes_web,
+                }
+                detalles_errores_planillas.append(nuevo_reg)
+                idx_errores[key_w] = nuevo_reg
+
     prec_flecha_pct = round((flechas_correctas / total_flechas_evaluadas) * 100, 1) if total_flechas_evaluadas > 0 else 96.5
     error_flecha_pct = round(100.0 - prec_flecha_pct, 1)
     planillas_exactas_pct = round((planillas_exactas / total_planillas_evaluadas) * 100, 1) if total_planillas_evaluadas > 0 else 91.7
     prec_totales_pct = round((coincidencias_total_puntos / total_planillas_evaluadas) * 100, 1) if total_planillas_evaluadas > 0 else 95.8
 
-    # Ordenamiento configurable de discrepancias / errores
     if "Cantidad" in str(criterio_orden):
         detalles_errores_planillas.sort(key=lambda x: (-len(x["errores"]), x["score_certeza"]))
         criterio_lbl = "Organizado por: <b>Cantidad de Discrepancias / Errores</b> (Mayor número de errores primero)"
@@ -1004,8 +1082,8 @@ def calcular_metricas_evaluacion(manifiesto_3, csv_path=None, criterio_orden="Pr
                 <tr style="background:#7f1d1d; color:#fef2f2;">
                     <th style="padding:8px; text-align:center;">Recorte (HD)</th>
                     <th style="padding:8px;">Posición / Diana</th>
-                    <th style="padding:8px;">Arquero Leído vs GT</th>
-                    <th style="padding:8px;">Totales (Calc / Papel / GT)</th>
+                    <th style="padding:8px;">Arquero Leído vs Web/GT</th>
+                    <th style="padding:8px;">Totales (Calc / Papel / Web-GT)</th>
                     <th style="padding:8px;">Detalle Específico de Discrepancias / Errores</th>
                     <th style="padding:8px; text-align:center;">Estado / Certeza</th>
                 </tr>
@@ -1018,9 +1096,9 @@ def calcular_metricas_evaluacion(manifiesto_3, csv_path=None, criterio_orden="Pr
             pag_tgt = f"Pág {err_item['pagina']} - Diana {err_item['target']}"
             arq_info = f"<b>{err_item['arquero_trans']}</b>"
             if err_item['gt_archer'] != "N/A (Sin GT)" and err_item['gt_archer'] != err_item['arquero_trans']:
-                arq_info += f"<br><small style='color:#f59e0b;'>Real GT: {err_item['gt_archer']}</small>"
+                arq_info += f"<br><small style='color:#f59e0b;'>Oficial: {err_item['gt_archer']}</small>"
 
-            tot_info = f"Calc: <b>{err_item['calc_total']}</b> | Papel: {err_item['tot_ofic']} | GT: <b>{err_item['gt_total']}</b>"
+            tot_info = f"Calc: <b>{err_item['calc_total']}</b> | Papel: {err_item['tot_ofic']} | Oficial: <b>{err_item['gt_total']}</b>"
 
             list_errs_html = "<ul style='margin:0; padding-left:16px; color:#fca5a5;'>"
             for e_str in err_item["errores"]:
@@ -1048,7 +1126,7 @@ def calcular_metricas_evaluacion(manifiesto_3, csv_path=None, criterio_orden="Pr
     else:
         html_tabla_errores = """
         <div style="background:#064e3b; color:#a7f3d0; padding:15px; border-radius:8px; border:1px solid #059669; margin-top:20px;">
-            <b>✅ ¡Excelente! No se detectaron errores ni discrepancias entre la inferencia del modelo y la Verdad Terreno.</b>
+            <b>✅ ¡Excelente! No se detectaron errores ni discrepancias entre la inferencia del modelo y los resultados oficiales.</b>
             <p style="margin:5px 0 0 0; font-size:12px;">Todas las flechas, sumatorias y datos de cabecera coincidieron al 100%.</p>
         </div>
         """
@@ -1060,7 +1138,35 @@ def calcular_metricas_evaluacion(manifiesto_3, csv_path=None, criterio_orden="Pr
     t_p1 = float(tiempos.get("paso1", 0.0))
     t_p2 = float(tiempos.get("paso2", 0.0))
     t_p3 = float(tiempos.get("paso3", 0.0))
-    t_tot = round(t_p0 + t_p1 + t_p2 + t_p3, 2)
+    t_p4 = float(tiempos.get("paso4", 0.0))
+    t_tot = round(t_p0 + t_p1 + t_p2 + t_p3 + t_p4, 2)
+
+    if manifiesto_4 and isinstance(manifiesto_4, dict):
+        res_g4 = manifiesto_4.get("resumen_agente4", {})
+        stats_g4 = manifiesto_4.get("estadisticas_fallas", {})
+        cotejados_web = res_g4.get("total_cuadrantes_cotejados", 0)
+        dns_web = res_g4.get("ausencias_dns_confirmadas", 0)
+        activos_web = max(0, cotejados_web - dns_web)
+
+        errores_puntaje_web = (
+            stats_g4.get("discrepancia_turno1", 0)
+            + stats_g4.get("discrepancia_turno2", 0)
+            + stats_g4.get("discrepancia_total", 0)
+            + alertas_omisa_cnt
+        )
+        if activos_web > 0:
+            pct_tot_web = round(100.0 * max(0, activos_web - errores_puntaje_web) / activos_web, 1)
+            prec_total_web_celda = f"{pct_tot_web}% ({max(0, activos_web - errores_puntaje_web)}/{activos_web} turnos)"
+        else:
+            prec_total_web_celda = "N/A"
+
+        resumen_web_celda = (
+            f"<b>{discrepancias_web_cnt} Discrepancia(s) / Sugerencia(s)</b> + "
+            f"<b>{alertas_omisa_cnt} Alerta(s) Planilla Omisa</b> para Revisión Humana"
+        )
+    else:
+        prec_total_web_celda = "Pendiente"
+        resumen_web_celda = "Pendiente de ejecutar Paso 4 (Verificación Web)"
 
     html_tiempos_grid = f"""
     <div style="background:#0f172a; padding:15px; border-radius:10px; border:1px solid #334155; margin-top:20px;">
@@ -1083,6 +1189,10 @@ def calcular_metricas_evaluacion(manifiesto_3, csv_path=None, criterio_orden="Pr
             <div style="background:#1e293b; padding:10px; border-radius:8px; border:1px solid #334155;">
                 <span style="color:#94a3b8; font-size:11px; display:block; text-transform:uppercase;">Paso 3 (Auditoría)</span>
                 <div style="font-size:18px; font-weight:bold; color:#f1f5f9; margin-top:4px;">{t_p3:.2f}s</div>
+            </div>
+            <div style="background:#1e293b; padding:10px; border-radius:8px; border:1px solid #334155;">
+                <span style="color:#94a3b8; font-size:11px; display:block; text-transform:uppercase;">Paso 4 (Web Scraping)</span>
+                <div style="font-size:18px; font-weight:bold; color:#f1f5f9; margin-top:4px;">{t_p4:.2f}s</div>
             </div>
             <div style="background:#0284c7; padding:10px; border-radius:8px; border:1px solid #38bdf8;">
                 <span style="color:#e0f2fe; font-size:11px; display:block; font-weight:bold; text-transform:uppercase;">TIEMPO TOTAL</span>
@@ -1160,11 +1270,11 @@ def calcular_metricas_evaluacion(manifiesto_3, csv_path=None, criterio_orden="Pr
                 </tr>
                 <tr style="background:#1e293b; font-weight:bold; color:#f59e0b;">
                     <td style="padding:8px;">🌐 <b>Verificación Web Oficial (Agente 4)</b></td>
-                    <td style="padding:8px; color:#38bdf8;">98.2% (Potencial)</td>
-                    <td style="padding:8px; color:#38bdf8;">1.8%</td>
-                    <td style="padding:8px; color:#38bdf8;">95.8%</td>
-                    <td style="padding:8px; color:#38bdf8;">98.5%</td>
-                    <td style="padding:8px; color:#f59e0b;"><b>{discrepancias_web_cnt} Diferencia(s) / Sugerencia(s) para Revisión Humana</b></td>
+                    <td style="padding:8px; color:#64748b;">N/A (No releva flechas)</td>
+                    <td style="padding:8px; color:#64748b;">N/A (No releva flechas)</td>
+                    <td style="padding:8px; color:#64748b;">N/A (Solo totales por turno)</td>
+                    <td style="padding:8px; color:#38bdf8;">{prec_total_web_celda}</td>
+                    <td style="padding:8px; color:#f59e0b;">{resumen_web_celda}</td>
                 </tr>
             </tbody>
         </table>
@@ -1175,7 +1285,6 @@ def calcular_metricas_evaluacion(manifiesto_3, csv_path=None, criterio_orden="Pr
     </div>
     """
     return html
-
 
 
 # --- CONSTRUCCIÓN DE LA INTERFAZ WEB GRADIO ---
@@ -1282,7 +1391,6 @@ def build_ui():
                 gr.Markdown("### 👁️ Extracción de Texto con VLM / Nemotron")
                 gr.Markdown("Procesa los cuadrantes seleccionados utilizando el modelo multimodal con rate-limiting y fallback local.")
                 
-                # Tabla diagnóstica de resumen general de todos los arqueros procesados
                 diagnostico_paso2_out = gr.Markdown("Selecciona cuadrantes en el Paso 1 y haz clic en **Paso 2: Ejecutar OCR**.")
                 
                 gr.Markdown("---")
@@ -1318,14 +1426,14 @@ def build_ui():
                         diagnostico_paso3_out = gr.Markdown("Ejecuta el Paso 2 y haz clic en **Paso 3: Ejecutar Auditoría Lógica**.")
                         json_audit_inspector = gr.Code(label="📋 Detalle Completo de Auditoría Agente 3", language="json")
 
-                        # ==========================================
+            # ==========================================
             # TAB 4: PASO 4 - SCRAPING Y VERIFICACIÓN WEB
             # ==========================================
             with gr.Tab("🌐 Paso 4: Verificación Web", id="tab_paso4"):
                 with gr.Row():
                     with gr.Column(scale=1):
                         gr.Markdown("### 🌐 Verificación Oficial contra Resultados Web")
-                        gr.Markdown("El Agente 4 consulta la base de datos oficial en `arquerosonline.com.ar` y contrasta cada cuadrante usando la huella unívoca `(Categoría + Serie 1 + Serie 2)`.")
+                        gr.Markdown("El Agente 4 consulta la base de datos oficial en `arquerosonline.com.ar` y contrasta cada cuadrante por nombre, categoría y puntajes de Turno 1 / Turno 2.")
                         
                         dropdown_club_filtro = gr.Dropdown(
                             choices=["AFPSF - Asociación Familia Piemontesa San Francisco", "AFAPIECO - Asociación Familia Piemontesa Córdoba", "TCAP - Tiro con Arco Paraná A.D.", "GADA - Grupo Arqueros de Ataliva"],
@@ -1347,8 +1455,8 @@ def build_ui():
                             with gr.Column(scale=1):
                                 json_web_inspector = gr.Code(label="📋 Detalle de Cotejo Web y Sugerencias de Corrección Humana", language="json")
 
-# ==========================================
-            # TAB 4: MÉTRICAS Y TABLA DE ERRORES DETALLADA
+            # ==========================================
+            # TAB 5: MÉTRICAS Y TABLA DE ERRORES DETALLADA
             # ==========================================
             with gr.Tab("📊 Métricas y Registro de Errores", id="tab_metricas"):
                 with gr.Row():
@@ -1367,10 +1475,10 @@ def build_ui():
                         """)
 
             # ==========================================
-            # TAB 5: MANIFIESTO COMPLETO JSON
+            # TAB 6: MANIFIESTO COMPLETO JSON
             # ==========================================
             with gr.Tab("📄 Manifiesto JSON Global", id="tab_json"):
-                json_out = gr.Code(label="Manifiesto JSON Completo (Agente 1 + Agente 2 + Agente 3)", language="json")
+                json_out = gr.Code(label="Manifiesto JSON Completo (Agente 1 + Agente 2 + Agente 3 + Agente 4)", language="json")
 
         # --- EVENTOS Y CONTROL DE ESTADOS DE BOTONES Y REDIRECCIÓN DE PESTAÑAS ---
         btn_cargar.click(
@@ -1498,19 +1606,19 @@ def build_ui():
 
         btn_paso4.click(
             fn=ejecutar_paso4_scraping,
-            inputs=[state_manifiesto_1, state_manifiesto_2, state_manifiesto_3, state_tiempos, dropdown_club_filtro],
+            inputs=[state_manifiesto_1, state_manifiesto_2, state_manifiesto_3, state_tiempos, dropdown_club_filtro, radio_orden_metricas],
             outputs=[
-                diagnostico_paso4_out, json_out, dropdown_web_inspector, json_web_raw_inspector, json_web_inspector, state_manifiesto_4,
-                state_tiempos, btn_paso4, btn_metricas, tabs_main
+                diagnostico_paso4_out, json_out, dropdown_web_inspector, json_web_raw_inspector, json_web_inspector,
+                state_manifiesto_4, state_tiempos, html_metricas_out, btn_paso4, btn_metricas, tabs_main
             ]
         )
 
         btn_ejecutar_paso4_directo.click(
             fn=ejecutar_paso4_scraping,
-            inputs=[state_manifiesto_1, state_manifiesto_2, state_manifiesto_3, state_tiempos, dropdown_club_filtro],
+            inputs=[state_manifiesto_1, state_manifiesto_2, state_manifiesto_3, state_tiempos, dropdown_club_filtro, radio_orden_metricas],
             outputs=[
-                diagnostico_paso4_out, json_out, dropdown_web_inspector, json_web_raw_inspector, json_web_inspector, state_manifiesto_4,
-                state_tiempos, btn_paso4, btn_metricas, tabs_main
+                diagnostico_paso4_out, json_out, dropdown_web_inspector, json_web_raw_inspector, json_web_inspector,
+                state_manifiesto_4, state_tiempos, html_metricas_out, btn_paso4, btn_metricas, tabs_main
             ]
         )
 
@@ -1522,13 +1630,13 @@ def build_ui():
 
         btn_metricas.click(
             fn=ir_a_metricas_ui,
-            inputs=[state_manifiesto_3, radio_orden_metricas, state_tiempos],
+            inputs=[state_manifiesto_3, state_manifiesto_4, radio_orden_metricas, state_tiempos],
             outputs=[html_metricas_out, btn_metricas, tabs_main]
         )
 
         radio_orden_metricas.change(
-            fn=lambda m3, ord_val, st: calcular_metricas_evaluacion(m3, criterio_orden=ord_val, state_tiempos=st),
-            inputs=[state_manifiesto_3, radio_orden_metricas, state_tiempos],
+            fn=lambda m3, m4, ord_val, st: calcular_metricas_evaluacion(m3, criterio_orden=ord_val, state_tiempos=st, manifiesto_4=m4),
+            inputs=[state_manifiesto_3, state_manifiesto_4, radio_orden_metricas, state_tiempos],
             outputs=[html_metricas_out]
         )
 
@@ -1537,7 +1645,7 @@ def build_ui():
 
 def main():
     print("=" * 60)
-    print("🚀 Servidor Principal Multi-Agente (v87) - Tiro con Arco")
+    print("🚀 Servidor Principal Multi-Agente (v88) - Tiro con Arco")
     print("🌍 Abre tu navegador en: http://localhost:7860")
     print("=" * 60)
     demo = build_ui()
