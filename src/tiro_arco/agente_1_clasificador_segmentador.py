@@ -1,13 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-🤖 Agente 1 (v28): Clasificador y Segmentador Semántico con Renderizado PDF Ultra-HD 300 DPI y Pre-OCR:
-- Renderiza PDFs a resolución Ultra-HD de 300 DPI (scale=4.1667) para eliminar borrosidad en tablas y números manuscritos.
-- Resetea caches de páginas y recortes al cargar nuevos documentos.
-- Pre-OCR de página completa para filtrado infalible de descartes (Portadas / Eliminatorias).
-- Mejora de calidad individual de páginas y recortes con opción de Deshacer (Undo).
-"""
-
 import os
 import re
 import json
@@ -232,19 +222,18 @@ class AgenteClasificadorSegmentador:
 
     @staticmethod
     def ejecutar_micro_ocr_cabecera(ruta_imagen, pre_ocr_texto=""):
-        if not OCR_SUPPORT or not os.path.exists(ruta_imagen):
-            return "indefinido", []
-
         try:
             if pre_ocr_texto and len(pre_ocr_texto) > 10:
                 text_lower = pre_ocr_texto.lower()
-            else:
+            elif OCR_SUPPORT and os.path.exists(ruta_imagen):
                 img = Image.open(ruta_imagen)
                 w, h = img.size
                 if max(w, h) > 1600:
                     scale = 1600.0 / float(max(w, h))
                     img = img.resize((int(w * scale), int(h * scale)), Image.Resampling.LANCZOS)
                 text_lower = pytesseract.image_to_string(img, lang="spa+eng").lower()
+            else:
+                return "indefinido", []
 
             hallazgos_clas = []
             hallazgos_elim = []
@@ -254,28 +243,32 @@ class AgenteClasificadorSegmentador:
             if m_clas:
                 hallazgos_clas.extend(m_clas)
 
+            # Reglas de aparición independientes para eliminatorias (con patrones limpios para evitar falsos positivos por ruido OCR)
             keywords_llaves_strict = [
-                r'1/16\s*final', r'1/8\s*final', r'1/4\s*final', r'1/2\s*final', r'\boro\b', r'\bbronce\b',
-                r'\bbronze\b', r'\bgold\b', r'semifinal', r'cuartos', r'octavos', r'16vos', r'8vos', r'4tos', r'final'
+                r'1/16\s*final', r'1/8\s*final', r'1/4\s*final', r'1/2\s*final',
+                r'1/16\s*f', r'1/8\s*f', r'1/4\s*f', r'1/2\s*f', r'1\-16', r'1\-8', r'1\-4', r'1\-2',
+                r'\boro\b', r'\bbronce\b', r'\bbronze\b', r'\bgold\b',
+                r'semifinal', r'cuartos', r'octavos', r'16vos', r'8vos', r'4tos', r'\bfinal\b'
             ]
             keywords_sets_strict = [
-                r'set\s*total', r'set\s*point', r'total\s*set\s*point', r'puntos\s*de\s*set',
+                r'set\s*total', r's[eo]t\s*point', r'total\s*s[eo]t', r'puntos\s*de\s*s[eo]t',
                 r'\bp\.s\.\b', r'\bs\.p\.\b', r'\bsets\b', r'sot\s*point'
             ]
             keywords_compuesto_elim = [
-                r'\bdes\.\b', r'desempate', r'total\s*set', r'\bs\.o\.\b', r'\bso\b',
-                r'puesto', r'ganador', r'duelo', r'eliminac', r'match'
+                r'\bdes\.\b', r'\bdesempate\b',
+                r'\bs\.o\.\b', r'\bso\s*1/2\b', r'\bshoot[\s\-]*off\b',
+                r'puesto', r'ganador', r'duelo', r'eliminac', r'match',
+                r'oponente', r'encuentro\s*final', r'encuentro'
             ]
 
             for pat in keywords_llaves_strict + keywords_sets_strict + keywords_compuesto_elim:
                 if re.search(pat, text_lower):
-                    hallazgos_elim.append(pat.replace(r'\b', '').replace(r'\s*', ' '))
+                    clean_tag = re.sub(r'\b|\s\*', ' ', pat).strip()
+                    hallazgos_elim.append(clean_tag)
 
-            if hallazgos_clas and not hallazgos_elim:
-                return "clasificacion", hallazgos_clas
-            elif hallazgos_elim and not hallazgos_clas:
+            if hallazgos_elim:
                 return "eliminatoria", hallazgos_elim
-            elif hallazgos_clas and hallazgos_elim:
+            elif hallazgos_clas:
                 return "clasificacion", hallazgos_clas
 
             return "indefinido", []
@@ -306,16 +299,16 @@ class AgenteClasificadorSegmentador:
             return "clasificacion", "4_arqueros"
 
         tipo_ocr, hallazgos = self.ejecutar_micro_ocr_cabecera(ruta_imagen, pre_ocr_texto=pre_ocr_texto)
-        if tipo_ocr == "clasificacion":
+        if tipo_ocr == "eliminatoria":
+            print(f"[Agente 1] 🎯 Eliminatoria detectada por Micro-OCR en '{os.path.basename(ruta_imagen)}' ({hallazgos})")
+            return "eliminatoria", "2_arqueros"
+        elif tipo_ocr == "clasificacion":
             print(f"[Agente 1] 🎯 Clasificación detectada por marca de distancia/turno en '{os.path.basename(ruta_imagen)}' ({hallazgos})")
             pil_img = Image.open(ruta_imagen)
             w, h = pil_img.size
             if w > h * 1.15:
                 return "clasificacion", "2_arqueros"
             return "clasificacion", "4_arqueros"
-        elif tipo_ocr == "eliminatoria":
-            print(f"[Agente 1] 🎯 Eliminatoria detectada por Micro-OCR en '{os.path.basename(ruta_imagen)}' ({hallazgos})")
-            return "eliminatoria", "2_arqueros"
 
         pil_img = Image.open(ruta_imagen)
         w, h = pil_img.size
@@ -454,7 +447,6 @@ class AgenteClasificadorSegmentador:
         shutil.copy(rec["ruta_recorte_original"], rec["ruta_recorte"])
         rec["es_mejorado"] = False
         return True, f"↩️ Se restauró la versión original para '{label_recorte}'."
-
 
     def mejorar_todas_las_paginas(self):
         """ Aplica filtro de mejora de calidad sobre todas las páginas en caché. """

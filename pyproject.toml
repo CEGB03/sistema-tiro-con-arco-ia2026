@@ -16,6 +16,8 @@ dependencies = [
     "requests>=2.31",
     "pypdfium2>=4.0",
     "pytesseract>=0.3.10",
+    "beautifulsoup4>=4.12",
+    "lxml>=5.0",
 ]
 
 [project.optional-dependencies]

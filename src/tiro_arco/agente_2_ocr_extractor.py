@@ -1,3 +1,32 @@
+
+def extraer_club_robusto(text_raw):
+    if not text_raw or not isinstance(text_raw, str):
+        return "N/A"
+    cleaned = re.sub(r'<x_[0-9\.]+>|<y_[0-9\.]+>|<class_[^>]+>', '', text_raw)
+    
+    # 1. Regex por prefijos explícitos de club o entidad
+    m_club = re.search(r'(?:P/A/C|P/F/C|P/F/G|PIFIG|FFG|PIAIC|Club|Organiza(?:dor)?)\s*:?\s*\*?\*?([^\*\n<]+)', cleaned, re.IGNORECASE)
+    if m_club:
+        cand = m_club.group(1).strip()
+    else:
+        # 2. Regex por patrones de nombres institucionales
+        m_asoc = re.search(r'\b(Asociaci[oó]n\s+[A-Za-zÁÉÍÓÚáéíóúÑñ\s]+|Asoc\.\s+[A-Za-zÁÉÍÓÚáéíóúÑñ\s]+|Club\s+[A-Za-zÁÉÍÓÚáéíóúÑñ\s]+|Grupo\s+[A-Za-zÁÉÍÓÚáéíóúÑñ\s]+)', cleaned, re.IGNORECASE)
+        if m_asoc:
+            cand = m_asoc.group(1).strip()
+        else:
+            cand = "N/A"
+    
+    if cand != "N/A":
+        # Limpieza de direcciones y datos de ubicación entre paréntesis
+        cand = re.sub(r'\([^\)]*(?:Av\.|Km\.|Calle|Ruta|Argentina|Fuerza|AFE|AFPSF|AFAPIECO)[^\)]*\)', '', cand, flags=re.IGNORECASE)
+        cand = re.sub(r'\b(RM|CM|BM|RW|CW|BW)\b', '', cand, flags=re.IGNORECASE).strip()
+        cand = re.sub(r'[\*\#\_~]', ' ', cand).strip()
+        cand = re.sub(r'\s+', ' ', cand).strip()
+        if len(cand) > 1:
+            return cand
+    return "N/A"
+
+
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -100,12 +129,9 @@ def extraer_cabecera_tesseract(text_raw, target_id_default="N/A"):
             if len(cand) > 2 and not cand.isdigit() and cand.lower() not in ["tanteador", "planillero"]:
                 arquero = cand
 
-    m_club = re.search(r'(?:P/A/C|P/F/C|PIAIC|Club|P/A/C:)\s*:?\s*\*?\*?([^\*\n<]+)', cleaned_text, re.IGNORECASE)
-    if m_club:
-        cand_club = re.sub(r'[\*\#\_]', '', m_club.group(1)).strip()
-        cand_club = re.sub(r'\b(RM|CM|BM)\b', '', cand_club, flags=re.IGNORECASE).strip()
-        if len(cand_club) > 1:
-            club = cand_club
+    club_cand = extraer_club_robusto(cleaned_text)
+    if club_cand != "N/A":
+        club = club_cand
 
     m_cat = re.search(r'(?:Cat(?:egor[ií]a)?|Categor\:\s*)\s*:?\s*\*?\*?([^\*\n<]+)', cleaned_text, re.IGNORECASE)
     if m_cat:
@@ -266,13 +292,7 @@ class Agente2OCRExtractor:
             target = re.sub(r'\s+', '', m_target.group(1)).upper()
 
         # 3. Club
-        club = "N/A"
-        m_club = re.search(r'(?:P/A/C|P/F/C|PIAIC|Club|P/A/C:)\s*:?\s*\*?\*?([^\*\n<]+)', cleaned, re.IGNORECASE)
-        if m_club:
-            cand_club = re.sub(r'[\*\#\_]', '', m_club.group(1)).strip()
-            cand_club = re.sub(r'\b(RM|CM|BM|RW|CW|BW)\b', '', cand_club, flags=re.IGNORECASE).strip()
-            if len(cand_club) > 1:
-                club = cand_club
+        club = extraer_club_robusto(cleaned)
 
         # 4. Categoría
         cat = "N/A"
@@ -898,28 +918,29 @@ class Agente2OCRExtractor:
         target_id_default = str(tarea.get("target_id", "N/A"))
 
         # Si Agente 1 marcó la hoja completa como información o portada, se omite OCR
-        if layout in ["portada", "eliminatoria"] or tipo_juego in ["sin_modo", "info", "informacion", "eliminatoria"] or tarea.get("es_pagina_informacion", False):
+        if layout in ["portada"] or tipo_juego in ["sin_modo", "info", "informacion", "eliminatoria"] or tarea.get("es_pagina_informacion", False):
             print(f"[Agente 2] ⏭️ Omitiendo OCR para {tarea.get('label', target_id_default)} (Hoja de Información / Portada)")
+            is_elim = (tipo_juego == "eliminatoria")
             return {
                 "pagina": tarea.get("pagina"),
                 "target_id": tarea.get("target_id"),
-                "tipo_juego": "informacion",
+                "tipo_juego": "eliminatoria" if is_elim else "informacion",
                 "layout": layout,
                 "ruta_recorte_original": ruta_recorte,
                 "ruta_recorte_procesada": ruta_recorte,
                 "transcripcion": {
                     "valido": True,
-                    "arquero": "N/A (Hoja Informativa)",
+                    "arquero": "N/A (Eliminatoria - Fuera de Alcance)" if is_elim else "N/A (Hoja Informativa)",
                     "target": target_id_default,
                     "club": "N/A",
                     "categoria": "N/A",
                     "sin_puntos_registrados": True,
-                    "observacion": "Hoja de Información / Portada (Descartada)",
+                    "observacion": "Planilla de Eliminatoria (Fuera de Alcance para Ranking)" if is_elim else "Hoja de Información / Portada (Descartada)",
                     "series": [],
                     "totales_planilla": {"total_puntos": 0, "cant_10s": 0, "cant_9s": 0},
-                    "texto_raw_ocr": "(Omitido por Hoja de Información / Portada)",
+                    "texto_raw_ocr": "(Omitido por Planilla de Eliminatoria)" if is_elim else "(Omitido por Hoja de Información / Portada)",
                     "modelo_usado": "Descartado (Sin OCR)",
-                    "tipo_juego": "informacion"
+                    "tipo_juego": "eliminatoria" if is_elim else "informacion"
                 }
             }
 
