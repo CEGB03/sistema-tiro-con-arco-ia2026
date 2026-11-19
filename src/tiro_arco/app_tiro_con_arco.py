@@ -40,7 +40,7 @@ def _generar_thumb_html(ruta_img, max_dim=140):
         return "📷"
     try:
         img = Image.open(ruta_img).convert("RGB")
-        
+
         # Generar miniatura optimizada
         img_thumb = img.copy()
         img_thumb.thumbnail((max_dim, max_dim))
@@ -89,8 +89,10 @@ def cargar_documento_paso0(archivo_input, state_tiempos=None):
             gr.CheckboxGroup(choices=[]),
             "{}",
             gr.update(interactive=False), # btn_paso1
+            gr.update(interactive=False), # btn_paso2_top
             gr.update(interactive=False), # btn_paso2
             gr.update(interactive=False), # btn_paso3
+            gr.update(interactive=False), # btn_paso4
             gr.update(interactive=False), # btn_metricas
             {"paso0": 0.0, "paso1": 0.0, "paso2": 0.0, "paso3": 0.0, "paso4": 0.0}
         )
@@ -126,8 +128,10 @@ def cargar_documento_paso0(archivo_input, state_tiempos=None):
         gr.CheckboxGroup(choices=[]),
         "{}",
         gr.update(interactive=True),  # Activa Paso 1
+        gr.update(interactive=False), # Desactiva Paso 2 (top)
         gr.update(interactive=False), # Desactiva Paso 2
         gr.update(interactive=False), # Desactiva Paso 3
+        gr.update(interactive=False), # Desactiva Paso 4
         gr.update(interactive=False), # Desactiva Métricas
         tiempos
     )
@@ -218,6 +222,7 @@ def ejecutar_paso1_segmentacion(archivo_input, tipo_manual, state_tiempos=None):
             "{}",
             None,
             gr.update(interactive=True),  # btn_paso1 sigue interactivo si falló
+            gr.update(interactive=False), # btn_paso2_top
             gr.update(interactive=False), # btn_paso2
             gr.Tabs(selected="tab_paso0"),
             tiempos
@@ -283,6 +288,7 @@ def ejecutar_paso1_segmentacion(archivo_input, tipo_manual, state_tiempos=None):
         json_str,
         manifiesto_1,
         gr.update(interactive=False), # Desactiva btn_paso1 (ya ejecutado)
+        gr.update(interactive=True),  # Activa btn_paso2_top
         gr.update(interactive=True),  # Activa btn_paso2
         gr.Tabs(selected="tab_paso1"), # REDIRIGE A LA PESTAÑA PASO 1
         tiempos
@@ -355,14 +361,13 @@ def deshacer_todos_los_recortes_ui():
 def ejecutar_paso2_ocr(seleccionados, manifiesto_1, manifiesto_2_previo, state_tiempos=None):
     t0 = time.time()
     tiempos = dict(state_tiempos) if state_tiempos else {}
-    empty_audit_json = json.dumps({"info": "Haz clic en Paso 3 abajo para auditar los resultados."}, indent=2, ensure_ascii=False)
 
     if not manifiesto_1:
         return (
             "⚠️ Primero debes ejecutar el Paso 1 (Segmentación).",
             "{}", [], manifiesto_1, None, "", "{}", None,
             gr.Dropdown(choices=[], value=None), "{}",
-            gr.update(interactive=True), gr.update(interactive=False),
+            gr.update(interactive=True), gr.update(interactive=True), gr.update(interactive=False),
             gr.Tabs(selected="tab_paso1"), tiempos
         )
 
@@ -371,7 +376,7 @@ def ejecutar_paso2_ocr(seleccionados, manifiesto_1, manifiesto_2_previo, state_t
             "⚠️ Por favor selecciona al menos un cuadrante para realizar el OCR.",
             "{}", [], manifiesto_1, manifiesto_2_previo, "", "{}", None,
             gr.Dropdown(choices=[], value=None), "{}",
-            gr.update(interactive=True), gr.update(interactive=False),
+            gr.update(interactive=True), gr.update(interactive=True), gr.update(interactive=False),
             gr.Tabs(selected="tab_paso1"), tiempos
         )
 
@@ -484,6 +489,7 @@ def ejecutar_paso2_ocr(seleccionados, manifiesto_1, manifiesto_2_previo, state_t
         img_init,
         gr.Dropdown(choices=choices_inspector, value=primer_insp_key, label="🔍 Seleccionar Arquero/Cuadrante para Inspeccionar Salida en Crudo"),
         str_aud_json,
+        gr.update(interactive=False), # Desactiva btn_paso2_top (ya ejecutado)
         gr.update(interactive=False), # Desactiva btn_paso2 (ya ejecutado)
         gr.update(interactive=True),  # Activa btn_paso3
         gr.Tabs(selected="tab_paso2"), # REDIRIGE A LA PESTAÑA PASO 2
@@ -512,12 +518,13 @@ def inspeccionar_recorte(opcion_key, manifiesto_2):
 
 
 def extraer_opciones_clubes_y_fechas(manifiesto_1, manifiesto_2=None):
+    diag_inicial = "Ejecuta el **Paso 4: Verificación Web** para contrastar los resultados auditados contra la base oficial."
     if not hasattr(agente1, 'paginas_cache') or not agente1.paginas_cache:
-        return ["AFPSF - Asociación Familia Piemontesa San Francisco"], "AFPSF", "03/05/2026"
+        return ["AFPSF - Asociación Familia Piemontesa San Francisco"], "AFPSF", diag_inicial
 
     page_texts = [p_data.get("pre_ocr_texto", "").lower() for p_data in agente1.paginas_cache.values() if p_data.get("pre_ocr_texto")]
     if not page_texts:
-        return ["AFPSF - Asociación Familia Piemontesa San Francisco"], "AFPSF", "03/05/2026"
+        return ["AFPSF - Asociación Familia Piemontesa San Francisco"], "AFPSF", diag_inicial
 
     total_pags = len(page_texts)
 
@@ -561,15 +568,31 @@ def extraer_opciones_clubes_y_fechas(manifiesto_1, manifiesto_2=None):
         opciones_presentes = ["AFPSF - Asociación Familia Piemontesa San Francisco"]
 
     primer_club = opciones_presentes[0].split(" - ")[0].strip()
-    return opciones_presentes, primer_club, "03/05/2026"
+    return opciones_presentes, primer_club, diag_inicial
 
 
+# --- PASO 3: AUDITORÍA ---
 def ejecutar_paso3_auditoria(manifiesto_1, manifiesto_2, criterio_orden="Prioridad (Nivel de Urgencia)", state_tiempos=None):
     t0 = time.time()
     tiempos = dict(state_tiempos) if state_tiempos else {}
     if not manifiesto_2:
         empty_audit_json = json.dumps({"info": "Primero debes ejecutar el Paso 2 (OCR)."}, indent=2, ensure_ascii=False)
-        return "⚠️ Primero debes ejecutar el Paso 2 (OCR).", "{}", gr.Dropdown(choices=[]), empty_audit_json, None, "{}", "<div style='padding:15px; background:#fff3cd;'>⚠️ Ejecuta el Paso 2 antes de auditar.</div>", gr.update(interactive=True), gr.update(interactive=False), gr.Tabs(selected="tab_paso2"), tiempos
+        return (
+            "⚠️ Primero debes ejecutar el Paso 2 (OCR).",
+            "{}",
+            gr.Dropdown(choices=[]),
+            empty_audit_json,
+            None,
+            "{}",
+            "<div style='padding:15px; background:#fff3cd;'>⚠️ Ejecuta el Paso 2 antes de auditar.</div>",
+            gr.update(interactive=True),
+            gr.update(interactive=False),
+            gr.update(interactive=False),
+            gr.Dropdown(choices=["AFPSF - Asociación Familia Piemontesa San Francisco"], value="AFPSF", allow_custom_value=True),
+            "Ejecuta el **Paso 3** y luego haz clic en **Paso 4: Verificación Web**.",
+            gr.Tabs(selected="tab_paso2"),
+            tiempos
+        )
 
     print(f"[UI] ⚖️ Ejecutando Paso 3 (Agente 3 - Auditoría Lógica y Reconciliación)...")
     manifiesto_3 = agente3.auditar_manifiesto_completo(manifiesto_2)
@@ -1295,14 +1318,14 @@ def build_ui():
     .tab-nav button { font-weight: bold; font-size: 14px; padding: 10px 16px; }
     """
 
-    with gr.Blocks(title="🎯 Sistema Multi-Agente - Tiro con Arco (v87)", css=custom_css) as demo:
+    with gr.Blocks(title="🎯 Sistema Multi-Agente - Tiro con Arco (v88)", css=custom_css) as demo:
         with gr.Row(elem_id="header-bar", variant="compact"):
             with gr.Column(scale=3):
                 gr.HTML("""
                 <div style="display:flex; align-items:center; gap:12px; padding:8px 0;">
                     <div style="background:#0284c7; padding:10px; border-radius:10px; font-size:24px;">🎯</div>
                     <div>
-                        <h1 class="app-title">🎯 Sistema Multi-Agente - Tiro con Arco (v87)</h1>
+                        <h1 class="app-title">🎯 Sistema Multi-Agente - Tiro con Arco (v88)</h1>
                         <p class="app-subtitle">Navegación Modular Autoescalable • Segmentación, OCR Vision-Language y Auditoría Lógica en Vivo</p>
                     </div>
                 </div>
@@ -1363,7 +1386,7 @@ def build_ui():
                 with gr.Row():
                     with gr.Column(scale=1):
                         diagnostico_paso1_out = gr.Markdown("Ejecuta el **Paso 0** y luego haz clic en **Paso 1: Dividir Cuadrantes**.")
-                        
+
                         gr.Markdown("---")
                         gr.Markdown("### 🛠️ Inspección y Mejora de Recortes")
                         dropdown_cuadrantes = gr.Dropdown(choices=[], label="🔍 Seleccionar Recorte de Cuadrante")
@@ -1390,13 +1413,13 @@ def build_ui():
             with gr.Tab("👁️ Paso 2: OCR Extracción", id="tab_paso2"):
                 gr.Markdown("### 👁️ Extracción de Texto con VLM / Nemotron")
                 gr.Markdown("Procesa los cuadrantes seleccionados utilizando el modelo multimodal con rate-limiting y fallback local.")
-                
+
                 diagnostico_paso2_out = gr.Markdown("Selecciona cuadrantes en el Paso 1 y haz clic en **Paso 2: Ejecutar OCR**.")
-                
+
                 gr.Markdown("---")
                 gr.Markdown("### 🔍 Inspección Individual por Arquero (Texto Crudo VLM + JSON Structured)")
                 dropdown_inspector = gr.Dropdown(choices=[], label="🔍 Seleccionar Arquero/Cuadrante a Inspeccionar")
-                
+
                 with gr.Row():
                     with gr.Column(scale=1):
                         image_inspector = gr.Image(label="🖼️ Recorte HD Interactivo", interactive=False)
@@ -1418,7 +1441,7 @@ def build_ui():
                         gr.Markdown("### ⚖️ Auditoría Lógica y Control de Certeza (Agente 3)")
                         gr.Markdown("Aplica las reglas de auditoría matemática, reconciliación de totales en papel y autocompletado por padrón local.")
                         dropdown_audit = gr.Dropdown(choices=[], label="⚖️ Seleccionar Arquero/Cuadrante Auditado")
-                        
+
                         gr.Markdown("---")
                         btn_paso4 = gr.Button("🌐 Paso 4: Verificación Web (Agente 4) ➔", variant="primary", interactive=False)
 
@@ -1434,7 +1457,7 @@ def build_ui():
                     with gr.Column(scale=1):
                         gr.Markdown("### 🌐 Verificación Oficial contra Resultados Web")
                         gr.Markdown("El Agente 4 consulta la base de datos oficial en `arquerosonline.com.ar` y contrasta cada cuadrante por nombre, categoría y puntajes de Turno 1 / Turno 2.")
-                        
+
                         dropdown_club_filtro = gr.Dropdown(
                             choices=["AFPSF - Asociación Familia Piemontesa San Francisco", "AFAPIECO - Asociación Familia Piemontesa Córdoba", "TCAP - Tiro con Arco Paraná A.D.", "GADA - Grupo Arqueros de Ataliva"],
                             value="AFPSF - Asociación Familia Piemontesa San Francisco",
@@ -1442,7 +1465,7 @@ def build_ui():
                             allow_custom_value=True
                         )
                         btn_ejecutar_paso4_directo = gr.Button("🔄 Re-ejecutar Verificación Web con Club Seleccionado", variant="secondary")
-                        
+
                         gr.Markdown("---")
                         dropdown_web_inspector = gr.Dropdown(choices=[], label="🌐 Seleccionar Arquero para Inspeccionar Sugerencia Web")
                         btn_metricas = gr.Button("📊 Ir a Métricas y Evaluación ➔", variant="primary", interactive=False)
@@ -1488,7 +1511,7 @@ def build_ui():
                 status_paso0, galeria_paginas_out, dropdown_paginas, visor_pagina_out, diagnostico_paso1_out,
                 galeria_cuadrantes_out, dropdown_cuadrantes, visor_cuadrante_out,
                 checkbox_cuadrantes, json_out,
-                btn_paso1, btn_paso2, btn_paso3, btn_metricas, state_tiempos
+                btn_paso1, btn_paso2_top, btn_paso2, btn_paso3, btn_paso4, btn_metricas, state_tiempos
             ]
         )
 
@@ -1528,7 +1551,7 @@ def build_ui():
             outputs=[
                 diagnostico_paso1_out, galeria_cuadrantes_out, dropdown_cuadrantes, visor_cuadrante_out,
                 checkbox_cuadrantes, json_out, state_manifiesto_1,
-                btn_paso1, btn_paso2, tabs_main, state_tiempos
+                btn_paso1, btn_paso2_top, btn_paso2, tabs_main, state_tiempos
             ]
         )
 
@@ -1568,7 +1591,7 @@ def build_ui():
             outputs=[
                 diagnostico_paso2_out, json_out, galeria_cuadrantes_out, state_manifiesto_1, state_manifiesto_2,
                 raw_ocr_out, json_inspector, image_inspector, dropdown_inspector, json_auditoria_nemotron,
-                btn_paso2, btn_paso3, tabs_main, state_tiempos
+                btn_paso2_top, btn_paso2, btn_paso3, tabs_main, state_tiempos
             ]
         )
 
@@ -1578,7 +1601,7 @@ def build_ui():
             outputs=[
                 diagnostico_paso2_out, json_out, galeria_cuadrantes_out, state_manifiesto_1, state_manifiesto_2,
                 raw_ocr_out, json_inspector, image_inspector, dropdown_inspector, json_auditoria_nemotron,
-                btn_paso2, btn_paso3, tabs_main, state_tiempos
+                btn_paso2_top, btn_paso2, btn_paso3, tabs_main, state_tiempos
             ]
         )
 
@@ -1645,7 +1668,7 @@ def build_ui():
 
 def main():
     print("=" * 60)
-    print("🚀 Servidor Principal Multi-Agente (v88) - Tiro con Arco")
+    print("🚀 Servidor Principal Multi-Agente (v89) - Tiro con Arco")
     print("🌍 Abre tu navegador en: http://localhost:7860")
     print("=" * 60)
     demo = build_ui()

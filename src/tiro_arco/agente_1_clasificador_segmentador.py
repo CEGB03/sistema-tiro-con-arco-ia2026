@@ -1,3 +1,13 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+🤖 Agente 1 (v37 - Merge Unificado): Clasificador y Segmentador Semántico con Renderizado PDF Ultra-HD 300 DPI y Pre-OCR:
+- Renderiza PDFs a resolución Ultra-HD de 300 DPI (scale=4.1667) para eliminar borrosidad en tablas y números manuscritos.
+- Preserva las mejoras de página realizadas en el Paso 0 al ejecutar el Paso 1 sobre el mismo documento.
+- Pre-OCR de página completa para filtrado de descartes (Portadas / Eliminatorias).
+- Clasifica planillas de Eliminatorias como tipo_juego="eliminatoria", layout="2_arqueros", es_pagina_informacion=False.
+"""
+
 import os
 import re
 import json
@@ -76,6 +86,7 @@ class AgenteClasificadorSegmentador:
             raise FileNotFoundError(f"El archivo '{ruta_archivo}' no existe.")
 
         self.reset_caches()
+        nombre_archivo = os.path.basename(ruta_archivo)
         es_pdf = ruta_archivo.lower().endswith('.pdf')
         paginas_info = []
 
@@ -84,7 +95,6 @@ class AgenteClasificadorSegmentador:
                 raise ImportError("Se requiere 'pypdfium2' para procesar archivos PDF.")
             doc = pdfium.PdfDocument(ruta_archivo)
             for i, page in enumerate(doc):
-                # ULTRA HIGH DEFINITION: Renderizado a 300 DPI (scale=4.1667 => 72*4.1667 = 300 DPI)
                 bitmap = page.render(scale=4.1667)
                 pil_img = bitmap.to_pil()
                 img_orig_path = os.path.join(self.output_dir, f"pagina_{i+1}_orig.png")
@@ -92,7 +102,6 @@ class AgenteClasificadorSegmentador:
                 pil_img.save(img_orig_path, "PNG", compress_level=0)
                 pil_img.save(img_act_path, "PNG", compress_level=0)
 
-                # Pre-OCR de página completa en alta resolución
                 text_page_raw = ""
                 if OCR_SUPPORT:
                     try:
@@ -101,6 +110,7 @@ class AgenteClasificadorSegmentador:
                         pass
 
                 pag_data = {
+                    "archivo_origen": nombre_archivo,
                     "numero_pagina": i + 1,
                     "ruta_original": img_orig_path,
                     "ruta_actual": img_act_path,
@@ -124,6 +134,7 @@ class AgenteClasificadorSegmentador:
                     pass
 
             pag_data = {
+                "archivo_origen": nombre_archivo,
                 "numero_pagina": 1,
                 "ruta_original": img_orig_path,
                 "ruta_actual": img_act_path,
@@ -136,7 +147,6 @@ class AgenteClasificadorSegmentador:
         return paginas_info
 
     def mejorar_calidad_pagina(self, num_pagina):
-        """ Aplica filtro de mejora de calidad sobre la página especificada. """
         if not num_pagina:
             return False, "⚠️ Selecciona un número de página válido."
 
@@ -152,7 +162,6 @@ class AgenteClasificadorSegmentador:
         return False, f"⚠️ Error al procesar la mejora para Página {num_pag}."
 
     def deshacer_mejora_pagina(self, num_pagina):
-        """ Restaura la versión original de la página sin filtros. """
         if not num_pagina:
             return False, "⚠️ Selecciona un número de página válido."
 
@@ -164,6 +173,25 @@ class AgenteClasificadorSegmentador:
         shutil.copy(pag["ruta_original"], pag["ruta_actual"])
         pag["es_mejorada"] = False
         return True, f"↩️ Se restauró la versión original para Página {num_pag}."
+
+    def mejorar_todas_las_paginas(self):
+        if not self.paginas_cache:
+            return False, "⚠️ No hay páginas cargadas para mejorar."
+
+        cant = 0
+        for num_pag in self.paginas_cache:
+            exito, _ = self.mejorar_calidad_pagina(num_pag)
+            if exito:
+                cant += 1
+        return True, f"✨ Calidad mejorada con éxito para TODAS las páginas ({cant} páginas)."
+
+    def deshacer_todas_las_paginas(self):
+        if not self.paginas_cache:
+            return False, "⚠️ No hay páginas cargadas para deshacer."
+
+        for num_pag in self.paginas_cache:
+            self.deshacer_mejora_pagina(num_pag)
+        return True, "↩️ Se restauró la versión original para TODAS las páginas."
 
     @staticmethod
     def tiene_tabla_de_tiros(ruta_imagen):
@@ -222,61 +250,53 @@ class AgenteClasificadorSegmentador:
 
     @staticmethod
     def ejecutar_micro_ocr_cabecera(ruta_imagen, pre_ocr_texto=""):
-        try:
-            if pre_ocr_texto and len(pre_ocr_texto) > 10:
-                text_lower = pre_ocr_texto.lower()
-            elif OCR_SUPPORT and os.path.exists(ruta_imagen):
+        text = pre_ocr_texto.strip()
+        if not text and OCR_SUPPORT and os.path.exists(ruta_imagen):
+            try:
                 img = Image.open(ruta_imagen)
                 w, h = img.size
                 if max(w, h) > 1600:
                     scale = 1600.0 / float(max(w, h))
                     img = img.resize((int(w * scale), int(h * scale)), Image.Resampling.LANCZOS)
-                text_lower = pytesseract.image_to_string(img, lang="spa+eng").lower()
-            else:
-                return "indefinido", []
+                text = pytesseract.image_to_string(img, lang="spa+eng")
+            except Exception:
+                pass
 
-            hallazgos_clas = []
-            hallazgos_elim = []
-
-            pat_dist_clas = r'\b(?:10|15|18|20|30|40|50|60|70)\s*(?:m|mts|metros)?\s*[\-\_]?\s*[12]\b|\bturno\s*:?\s*[12]\b|\bronda\s*:?\s*[12]\b'
-            m_clas = re.findall(pat_dist_clas, text_lower)
-            if m_clas:
-                hallazgos_clas.extend(m_clas)
-
-            # Reglas de aparición independientes para eliminatorias (con patrones limpios para evitar falsos positivos por ruido OCR)
-            keywords_llaves_strict = [
-                r'1/16\s*final', r'1/8\s*final', r'1/4\s*final', r'1/2\s*final',
-                r'1/16\s*f', r'1/8\s*f', r'1/4\s*f', r'1/2\s*f', r'1\-16', r'1\-8', r'1\-4', r'1\-2',
-                r'\boro\b', r'\bbronce\b', r'\bbronze\b', r'\bgold\b',
-                r'semifinal', r'cuartos', r'octavos', r'16vos', r'8vos', r'4tos', r'\bfinal\b'
-            ]
-            keywords_sets_strict = [
-                r'set\s*total', r's[eo]t\s*point', r'total\s*s[eo]t', r'puntos\s*de\s*s[eo]t',
-                r'\bp\.s\.\b', r'\bs\.p\.\b', r'\bsets\b', r'sot\s*point'
-            ]
-            keywords_compuesto_elim = [
-                r'\bdes\.\b', r'\bdesempate\b',
-                r'\bs\.o\.\b', r'\bso\s*1/2\b', r'\bshoot[\s\-]*off\b',
-                r'puesto', r'ganador', r'duelo', r'eliminac', r'match',
-                r'oponente', r'encuentro\s*final', r'encuentro'
-            ]
-
-            for pat in keywords_llaves_strict + keywords_sets_strict + keywords_compuesto_elim:
-                if re.search(pat, text_lower):
-                    clean_tag = re.sub(r'\b|\s\*', ' ', pat).strip()
-                    hallazgos_elim.append(clean_tag)
-
-            if hallazgos_elim:
-                return "eliminatoria", hallazgos_elim
-            elif hallazgos_clas:
-                return "clasificacion", hallazgos_clas
-
-            return "indefinido", []
-        except Exception:
+        text_lower = text.lower()
+        if not text_lower:
             return "indefinido", []
 
-    def analizar_layout(self, ruta_imagen, tipo_juego_manual=None, pre_ocr_texto=""):
-        filename = os.path.basename(ruta_imagen).lower()
+        hallazgos_clas = []
+        hallazgos_elim = []
+
+        pat_dist_clas = r'\b(?:10|15|18|20|30|40|50|60|70)\s*(?:m|mts|metros)?\s*[\-\_]?\s*[12]\b|\bturno\s*:?\s*[12]\b|\bronda\s*:?\s*[12]\b|\b1[a-d]\b|\b2[a-d]\b'
+        m_clas = re.findall(pat_dist_clas, text_lower)
+        if m_clas:
+            hallazgos_clas.extend(m_clas)
+
+        patterns_elim = [
+            r'1/16\s*(?:de\s*)?final', r'1/8\s*(?:de\s*)?final', r'1/4\s*(?:de\s*)?final', r'1/2\s*(?:de\s*)?final',
+            r'\bsemifinal(?:es)?\b', r'\bcuartos\s*(?:de\s*final)?\b', r'\boctavos\s*(?:de\s*final)?\b',
+            r'\b16vos\b', r'\b8vos\b', r'\b4tos\b',
+            r'match\s*por\s*(?:oro|bronce|bronze|gold)', r'final\s*por\s*(?:oro|bronce|bronze|gold)',
+            r'set\s*points?', r'puntos?\s*de\s*set', r'sot\s*points?', r'total\s*set', r'set\s*total',
+            r'\bdesempate\b', r'\bshoot[-_\s]*off\b', r'\bs\.o\.\b',
+            r'\bduelo\b', r'\beliminac(?:ion|itoria)?\b', r'\bpuesto\b', r'\bposici[oó]n\b', r'\boponente\b', r'\bopponent\b'
+        ]
+
+        for pat in patterns_elim:
+            if re.search(pat, text_lower):
+                hallazgos_elim.append(pat)
+
+        if hallazgos_elim:
+            return "eliminatoria", hallazgos_elim
+        elif hallazgos_clas:
+            return "clasificacion", hallazgos_clas
+
+        return "indefinido", []
+
+    def analizar_layout(self, ruta_imagen, tipo_juego_manual=None, pre_ocr_texto="", fn_origen=""):
+        filename = (os.path.basename(ruta_imagen) + " " + fn_origen).lower()
 
         if tipo_juego_manual and tipo_juego_manual != "Auto":
             m = str(tipo_juego_manual).lower()
@@ -291,24 +311,29 @@ class AgenteClasificadorSegmentador:
             elif "clasificacion_4" in m or "4_arqueros" in m:
                 return "clasificacion", "4_arqueros"
 
-        keywords_eliminatoria_fn = ["puesto", "s.o.", "so", "ganador", "duelo", "eliminac", "1-8", "1-4", "1-2", "oro", "bronce"]
-        if any(kw in filename for kw in keywords_eliminatoria_fn):
+        keywords_eliminatoria_fn = ["puesto", "ganador", "duelo", "eliminac", "bronce", "2-arqueros", "2_arqueros", "oponente", "opponent"]
+        patterns_elim_fn = [r'\b1[-_/]8\b', r'\b1[-_/]4\b', r'\b1[-_/]2\b', r'\boro\b', r'\bs\.o\.\b', r'\bso\b']
+        if any(kw in filename for kw in keywords_eliminatoria_fn) or any(re.search(pat, filename) for pat in patterns_elim_fn):
             return "eliminatoria", "2_arqueros"
 
         if any(p in filename for p in ["4-arqueros", "4arqueros"]):
             return "clasificacion", "4_arqueros"
 
+        pattern_1_arquero = r'(?:\b[0-9]{1,2}[a-d][\_\-])|(?:crop|recorte|individual|1[-_]arquero|1arquero)'
+        if re.search(pattern_1_arquero, filename):
+            return "clasificacion", "1_arquero"
+
         tipo_ocr, hallazgos = self.ejecutar_micro_ocr_cabecera(ruta_imagen, pre_ocr_texto=pre_ocr_texto)
-        if tipo_ocr == "eliminatoria":
-            print(f"[Agente 1] 🎯 Eliminatoria detectada por Micro-OCR en '{os.path.basename(ruta_imagen)}' ({hallazgos})")
-            return "eliminatoria", "2_arqueros"
-        elif tipo_ocr == "clasificacion":
+        if tipo_ocr == "clasificacion":
             print(f"[Agente 1] 🎯 Clasificación detectada por marca de distancia/turno en '{os.path.basename(ruta_imagen)}' ({hallazgos})")
             pil_img = Image.open(ruta_imagen)
             w, h = pil_img.size
             if w > h * 1.15:
                 return "clasificacion", "2_arqueros"
             return "clasificacion", "4_arqueros"
+        elif tipo_ocr == "eliminatoria":
+            print(f"[Agente 1] 🎯 Eliminatoria detectada por Micro-OCR en '{os.path.basename(ruta_imagen)}' ({hallazgos})")
+            return "eliminatoria", "2_arqueros"
 
         pil_img = Image.open(ruta_imagen)
         w, h = pil_img.size
@@ -316,7 +341,6 @@ class AgenteClasificadorSegmentador:
         if w > h * 1.15:
             return "eliminatoria", "2_arqueros"
 
-        pattern_1_arquero = r'^(?:[0-9]{1,2}[a-d])[\_\-]|(?:crop|recorte|individual|1[-_]arquero|1arquero)'
         if re.search(pattern_1_arquero, filename):
             return "clasificacion", "1_arquero"
 
@@ -326,19 +350,24 @@ class AgenteClasificadorSegmentador:
         return "clasificacion", "4_arqueros"
 
     def procesar_documento(self, ruta_archivo, tipo_juego_manual=None, page_overrides=None):
-        if not self.paginas_cache:
+        nombre_archivo = os.path.basename(ruta_archivo)
+        cache_invalido = (
+            not self.paginas_cache
+            or any(p.get("ruta_original") and not os.path.exists(p["ruta_original"]) for p in self.paginas_cache.values())
+            or list(self.paginas_cache.values())[0].get("archivo_origen") != nombre_archivo
+        )
+        if cache_invalido:
             self.extraer_paginas_pdf_o_imagen(ruta_archivo)
 
         self.recortes_cache = {}
 
         manifiesto = {
-            "archivo_origen": os.path.basename(ruta_archivo),
+            "archivo_origen": nombre_archivo,
             "total_paginas": len(self.paginas_cache),
             "tareas_agente2": []
         }
 
-        fn_global = os.path.basename(ruta_archivo)
-        target_desde_nombre = extract_target_from_filename(fn_global)
+        target_desde_nombre = extract_target_from_filename(nombre_archivo)
         margin = 20
 
         for num_pag, pag_data in self.paginas_cache.items():
@@ -348,13 +377,13 @@ class AgenteClasificadorSegmentador:
             if page_overrides and isinstance(page_overrides, dict):
                 modo_manual = page_overrides.get(str(num_pag), modo_manual)
 
-            tipo_juego_pagina, layout = self.analizar_layout(img_path, tipo_juego_manual=modo_manual, pre_ocr_texto=pre_ocr_txt)
+            tipo_juego_pagina, layout = self.analizar_layout(img_path, tipo_juego_manual=modo_manual, pre_ocr_texto=pre_ocr_txt, fn_origen=nombre_archivo)
             img = Image.open(img_path)
             w, h = img.size
 
             tiene_tabla = self.tiene_tabla_de_tiros(img_path)
             es_elim = (tipo_juego_pagina == "eliminatoria")
-            es_pagina_info_forzada = (layout == "portada" or tipo_juego_pagina in ["info", "informacion"] or es_elim)
+            es_pagina_info_forzada = (layout == "portada" or tipo_juego_pagina in ["info", "informacion"])
 
             if layout == "4_arqueros":
                 cuadrantes_coords_tentativos = {
@@ -363,7 +392,7 @@ class AgenteClasificadorSegmentador:
                     "C": (0, max(0, h // 2 - margin), min(w, w // 2 + margin), h),
                     "D": (max(0, w // 2 - margin), max(0, h // 2 - margin), w, h)
                 }
-            elif layout == "2_arqueros":
+            elif layout == "2_arqueros" or es_elim:
                 cuadrantes_coords_tentativos = {
                     "A": (0, 0, min(w, w // 2 + margin), h),
                     "B": (max(0, w // 2 - margin), 0, w, h)
@@ -375,24 +404,25 @@ class AgenteClasificadorSegmentador:
             vacios_cuadrantes = {k: self.evaluar_densidad_tinta_cuadrante(img_path, c) for k, c in cuadrantes_coords_tentativos.items()}
             todos_cuadrantes_vacios = all(vacios_cuadrantes.values())
 
-            if not tiene_tabla or es_pagina_info_forzada or todos_cuadrantes_vacios:
+            if (not tiene_tabla or es_pagina_info_forzada or todos_cuadrantes_vacios) and not es_elim:
                 crop_orig_path = os.path.join(self.output_dir, f"pag_{num_pag}_pos_Portada_orig.png")
                 crop_act_path = os.path.join(self.output_dir, f"pag_{num_pag}_pos_Portada_actual.png")
                 img.save(crop_orig_path, "PNG")
                 img.save(crop_act_path, "PNG")
 
-                task_key = f"Pág {num_pag} - {'Eliminatoria' if es_elim else 'Hoja de Información / Portada'}"
+                task_key = f"Pág {num_pag} - Hoja de Información / Portada"
                 crop_info = {
                     "pagina": num_pag,
                     "target_id": "Portada",
-                    "tipo_juego": tipo_juego_pagina if es_elim else "informacion",
+                    "tipo_juego": "informacion",
                     "layout": "portada",
                     "ruta_recorte_original": crop_orig_path,
                     "ruta_recorte": crop_act_path,
                     "label": task_key,
                     "es_pagina_informacion": True,
                     "es_cuadrante_vacio": False,
-                    "es_mejorado": False
+                    "es_mejorado": False,
+                    "razon_preclasificacion": "Sin tabla de tiros en la hoja / Hoja Informativa" if not tiene_tabla else "Hoja de Información"
                 }
                 self.recortes_cache[task_key] = crop_info
                 manifiesto["tareas_agente2"].append(crop_info)
@@ -412,22 +442,22 @@ class AgenteClasificadorSegmentador:
                         "pagina": num_pag,
                         "target_id": target_pos,
                         "tipo_juego": tipo_juego_pagina,
-                        "layout": layout,
+                        "layout": "2_arqueros" if es_elim else layout,
                         "ruta_recorte_original": crop_orig_path,
                         "ruta_recorte": crop_act_path,
                         "label": label_str,
                         "es_pagina_informacion": False,
                         "es_cuadrante_vacio": es_vacio,
-                        "es_mejorado": False
+                        "es_mejorado": False,
+                        "razon_preclasificacion": "Planilla de Eliminatoria (fuera de alcance para ranking)" if es_elim else ("Cuadrante con datos anotados" if not es_vacio else "Cuadrante sin puntuaciones registradas")
                     }
                     self.recortes_cache[label_str] = crop_info
                     manifiesto["tareas_agente2"].append(crop_info)
 
-        print(f"[Agente 1] ✂️ Completada la clasificación y segmentación de {len(self.paginas_cache)} página(s) aplicando descarte de hoja completa sin tabla.")
+        print(f"[Agente 1] ✂️ Completada la clasificación y segmentación de {len(self.paginas_cache)} página(s).")
         return manifiesto
 
     def mejorar_calidad_recorte(self, label_recorte):
-        """ Aplica filtro de mejora de calidad sobre un recorte de cuadrante específico. """
         if label_recorte not in self.recortes_cache:
             return False, "Recorte no encontrado en caché."
 
@@ -439,7 +469,6 @@ class AgenteClasificadorSegmentador:
         return False, f"⚠️ Error al procesar la mejora para '{label_recorte}'."
 
     def deshacer_mejora_recorte(self, label_recorte):
-        """ Restaura la versión original del recorte de cuadrante sin filtros. """
         if label_recorte not in self.recortes_cache:
             return False, "Recorte no encontrado en caché."
 
@@ -448,48 +477,21 @@ class AgenteClasificadorSegmentador:
         rec["es_mejorado"] = False
         return True, f"↩️ Se restauró la versión original para '{label_recorte}'."
 
-    def mejorar_todas_las_paginas(self):
-        """ Aplica filtro de mejora de calidad sobre todas las páginas en caché. """
-        if not self.paginas_cache:
-            return False, "⚠️ No hay páginas cargadas en caché."
-
-        count = 0
-        for num_pag, pag in self.paginas_cache.items():
-            exito = ImageEnhancer.aplicar_mejora_calidad(pag["ruta_original"], pag["ruta_actual"])
-            if exito:
-                pag["es_mejorada"] = True
-                count += 1
-        return True, f"✨ Calidad mejorada con éxito para TODAS las páginas ({count} páginas)."
-
-    def deshacer_todas_las_paginas(self):
-        """ Restaura la versión original sin filtros para todas las páginas. """
-        if not self.paginas_cache:
-            return False, "⚠️ No hay páginas cargadas en caché."
-
-        for num_pag, pag in self.paginas_cache.items():
-            shutil.copy(pag["ruta_original"], pag["ruta_actual"])
-            pag["es_mejorada"] = False
-        return True, "↩️ Se restauró la versión original para TODAS las páginas."
-
     def mejorar_todos_los_recortes(self):
-        """ Aplica filtro de mejora de calidad sobre todos los recortes de cuadrantes en caché. """
         if not self.recortes_cache:
-            return False, "⚠️ No hay recortes cargados en caché."
+            return False, "⚠️ No hay recortes cargados para mejorar."
 
-        count = 0
-        for label_recorte, rec in self.recortes_cache.items():
-            exito = ImageEnhancer.aplicar_mejora_calidad(rec["ruta_recorte_original"], rec["ruta_recorte"])
+        cant = 0
+        for lbl in self.recortes_cache:
+            exito, _ = self.mejorar_calidad_recorte(lbl)
             if exito:
-                rec["es_mejorado"] = True
-                count += 1
-        return True, f"✨ Calidad mejorada con éxito para TODOS los recortes ({count} recortes)."
+                cant += 1
+        return True, f"✨ Calidad mejorada con éxito para TODOS los recortes ({cant} recortes)."
 
     def deshacer_todos_los_recortes(self):
-        """ Restaura la versión original sin filtros para todos los recortes. """
         if not self.recortes_cache:
-            return False, "⚠️ No hay recortes cargados en caché."
+            return False, "⚠️ No hay recortes cargados para deshacer."
 
-        for label_recorte, rec in self.recortes_cache.items():
-            shutil.copy(rec["ruta_recorte_original"], rec["ruta_recorte"])
-            rec["es_mejorado"] = False
+        for lbl in self.recortes_cache:
+            self.deshacer_mejora_recorte(lbl)
         return True, "↩️ Se restauró la versión original para TODOS los recortes."
